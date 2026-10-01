@@ -53,7 +53,7 @@ class AccountView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["addresses"] = self.request.user.addresses.all()
+        context["addresses"] = sorted(self.request.user.addresses.all(), key=lambda a: (a.label or a.name).lower())
         return context
 
 
