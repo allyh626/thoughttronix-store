@@ -1,0 +1,11 @@
+{# One address form field: label, widget, help text, and its errors. #}
+<div>
+  <label class="label mb-1" for="{{ field.id_for_label }}">{{ field.label }}</label>
+  {{ field }}
+  {% if field.help_text %}
+    <p class="mt-1 text-xs opacity-60">{{ field.help_text }}</p>
+  {% endif %}
+  {% for error in field.errors %}
+    <p class="mt-1 text-sm text-error">{{ error }}</p>
+  {% endfor %}
+</div>

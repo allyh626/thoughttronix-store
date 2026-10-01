@@ -30,7 +30,7 @@ The `seed` command creates a fixed demo world — the same one every run:
 | ---------- | ------------- | ------------------------------------------------------------- |
 | `admin`    | `admin123`    | Superuser: everything below, plus the Django admin at `/admin/` |
 | `employee` | `employee123` | Staff: the back office (products, orders, dashboard)           |
-| `customer` | `customer123` | A customer with order history and a live cart                  |
+| `customer` | `customer123` | A customer with order history, a live cart, and saved addresses |
 
 ## Commands
 
@@ -48,7 +48,7 @@ The `seed` command creates a fixed demo world — the same one every run:
 ## Repo layout
 
 `config/` is the project package (settings, root URLs); the four apps are
-`accounts` (custom user model), `products` (the public catalog and its
+`accounts` (custom user model, My account, and the address book), `products` (the public catalog and its
 back-office CRUD), `orders` (cart, checkout, orders — with the
 `place_order` service in `orders/services.py`), and `dashboard` (staff
 analytics, with the aggregations in `dashboard/queries.py`). Project-level

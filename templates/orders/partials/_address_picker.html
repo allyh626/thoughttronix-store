@@ -1,0 +1,22 @@
+{# The saved-address dropdown for one checkout section. Include with #}
+{# kind="shipping"|"billing" and selected=<the default address or None>. #}
+{# Hidden when the address book is empty. Choosing an entry swaps that #}
+{# section's fields via HTMX; "— New address —" swaps in blank fields. #}
+{% if saved_addresses %}
+  <div>
+    <label class="label mb-1" for="{{ kind }}-picker">Use a saved address</label>
+    <select id="{{ kind }}-picker"
+            name="address"
+            class="select w-full"
+            hx-get="{% url 'orders:checkout_address_fields' kind %}"
+            hx-target="#{{ kind }}-fields"
+            hx-swap="innerHTML">
+      <option value="">— New address —</option>
+      {% for address in saved_addresses %}
+        <option value="{{ address.pk }}" {% if address == selected %}selected{% endif %}>
+          {{ address }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+{% endif %}

@@ -8,7 +8,8 @@ Demo logins (documented in the README):
 
     admin / admin123        superuser
     employee / employee123  staff, "Junior Thought Curator"
-    customer / customer123  a plain customer, with order history and a live cart
+    customer / customer123  a plain customer, with order history, a live cart,
+                            and two saved addresses
 """
 
 import random
@@ -21,6 +22,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
+from accounts.models import Address
 from orders.models import Cart, Order, OrderItem
 from products.models import Category, Product, Tag
 
@@ -494,6 +496,14 @@ SEED_ADDRESSES = [
     ("28 Ganglion Court", "Denver", "CO", "80202"),
 ]
 
+# The customer demo login's address book: (label, street, city, state, zip,
+# default for shipping and billing). Drawn from SEED_ADDRESSES so it fits
+# the customer's order history.
+CUSTOMER_ADDRESSES = [
+    ("Home", *SEED_ADDRESSES[0], True),
+    ("Work", *SEED_ADDRESSES[1], False),
+]
+
 CARD_LAST4S = ["4242", "4111", "1881", "0005"]
 
 
@@ -507,6 +517,7 @@ class Command(BaseCommand):
         self._create_catalog(tags)
         self._create_users()
         self._create_customer_cart()
+        self._create_customer_addresses()
         self._create_orders()
 
         self.stdout.write(
@@ -516,7 +527,8 @@ class Command(BaseCommand):
                 f"{Product.objects.count()} products, "
                 f"{get_user_model().objects.count()} users, "
                 f"{Order.objects.count()} orders, "
-                f"and a live cart for 'customer'."
+                f"and a live cart and {Address.objects.count()} saved addresses "
+                f"for 'customer'."
             )
         )
 
@@ -585,6 +597,26 @@ class Command(BaseCommand):
         cart = Cart.for_user(customer)
         for slug, quantity in CUSTOMER_CART:
             cart.items.create(product=Product.objects.get(slug=slug), quantity=quantity)
+
+    def _create_customer_addresses(self):
+        """'Home' is the default for both kinds; 'Work' is not a default.
+
+        Wiped along with the user — addresses cascade on delete.
+        """
+        customer = get_user_model().objects.get(username="customer")
+        name = f"{customer.first_name} {customer.last_name}"
+        for label, street, city, state, zip_code, is_default in CUSTOMER_ADDRESSES:
+            Address.objects.create(
+                user=customer,
+                label=label,
+                name=name,
+                street=street,
+                city=city,
+                state=state,
+                zip=zip_code,
+                is_default_shipping=is_default,
+                is_default_billing=is_default,
+            )
 
     def _create_orders(self):
         """Order history: 4 visible orders for 'customer', 48 background.

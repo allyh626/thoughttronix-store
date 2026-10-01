@@ -1,6 +1,7 @@
+from django import forms
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 
-from .models import User
+from .models import Address, User
 
 
 class SignupForm(UserCreationForm):
@@ -26,3 +27,22 @@ class SignInForm(AuthenticationForm):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs["class"] = "input w-full"
+
+
+class AddressForm(forms.ModelForm):
+    """Add or edit a saved address. The rules come from the model fields,
+    which share ``accounts.validators`` with checkout. Defaults are set
+    from My account, never here."""
+
+    class Meta:
+        model = Address
+        fields = ["label", "name", "street", "line2", "city", "state", "zip"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            widget = field.widget
+            if isinstance(widget, forms.Select):
+                widget.attrs["class"] = "select w-full"
+            else:
+                widget.attrs["class"] = "input w-full"

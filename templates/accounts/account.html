@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}My Account — The ThoughtTronix Store{% endblock %}
+
+{% block content %}
+  <h1 class="text-3xl font-bold">My Account</h1>
+  <p class="mt-1 opacity-70">Signed in as <span class="font-semibold">{{ user.username }}</span></p>
+
+  <section class="mt-8">
+    <div class="flex items-center justify-between gap-4">
+      <h2 class="text-xl font-semibold">Saved addresses</h2>
+      <a href="{% url 'accounts:address_create' %}" class="btn btn-primary btn-sm">Add address</a>
+    </div>
+
+    {% if addresses %}
+      <div class="mt-4 grid gap-4 sm:grid-cols-2">
+        {% for address in addresses %}
+          <div class="card bg-base-100 shadow-md">
+            <div class="card-body">
+              <div class="flex flex-wrap items-center gap-2">
+                <h3 class="card-title text-base">{{ address.label|default:address.name }}</h3>
+                {% if address.is_default_shipping %}
+                  <span class="badge badge-primary badge-sm">Default shipping</span>
+                {% endif %}
+                {% if address.is_default_billing %}
+                  <span class="badge badge-secondary badge-sm">Default billing</span>
+                {% endif %}
+              </div>
+              <address class="not-italic text-sm opacity-80">
+                {{ address.name }}<br />
+                {{ address.street }}<br />
+                {% if address.line2 %}{{ address.line2 }}<br />{% endif %}
+                {{ address.city }}, {{ address.state }} {{ address.zip }}
+              </address>
+              <div class="card-actions mt-2 flex-wrap items-center">
+                <a href="{% url 'accounts:address_update' address.pk %}" class="btn btn-ghost btn-xs">Edit</a>
+                <a href="{% url 'accounts:address_delete' address.pk %}" class="btn btn-ghost btn-xs text-error">Delete</a>
+                {% if not address.is_default_shipping %}
+                  <form method="post" action="{% url 'accounts:address_set_default' address.pk 'shipping' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline btn-xs">Set as default shipping</button>
+                  </form>
+                {% endif %}
+                {% if not address.is_default_billing %}
+                  <form method="post" action="{% url 'accounts:address_set_default' address.pk 'billing' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline btn-xs">Set as default billing</button>
+                  </form>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="py-16 text-center">
+        <p class="text-5xl">🏠</p>
+        <p class="mt-4 text-xl font-semibold">No saved addresses yet</p>
+        <p class="mt-2 opacity-70">We already know where you are. Save an address and checkout will too.</p>
+        <a href="{% url 'accounts:address_create' %}" class="btn btn-primary btn-sm mt-6">Add an address</a>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

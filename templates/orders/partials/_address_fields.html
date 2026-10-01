@@ -1,0 +1,5 @@
+{# One checkout address section's fields. Rendered in place on the page, #}
+{# and returned alone by the HTMX fill endpoint when the picker changes. #}
+{% for field in fields %}
+  {% include "orders/partials/_field.html" %}
+{% endfor %}

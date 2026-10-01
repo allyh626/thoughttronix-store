@@ -10,66 +10,11 @@ and no ``clean()`` — none of its current rules need imperative validation.
 from django import forms
 from django.core.validators import RegexValidator
 
+from accounts.validators import US_STATES, zip_validator
+
 from .models import Order
 from .validators import validate_card_number, validate_expiry
 
-US_STATES = [
-    ("AL", "Alabama"),
-    ("AK", "Alaska"),
-    ("AZ", "Arizona"),
-    ("AR", "Arkansas"),
-    ("CA", "California"),
-    ("CO", "Colorado"),
-    ("CT", "Connecticut"),
-    ("DE", "Delaware"),
-    ("DC", "District of Columbia"),
-    ("FL", "Florida"),
-    ("GA", "Georgia"),
-    ("HI", "Hawaii"),
-    ("ID", "Idaho"),
-    ("IL", "Illinois"),
-    ("IN", "Indiana"),
-    ("IA", "Iowa"),
-    ("KS", "Kansas"),
-    ("KY", "Kentucky"),
-    ("LA", "Louisiana"),
-    ("ME", "Maine"),
-    ("MD", "Maryland"),
-    ("MA", "Massachusetts"),
-    ("MI", "Michigan"),
-    ("MN", "Minnesota"),
-    ("MS", "Mississippi"),
-    ("MO", "Missouri"),
-    ("MT", "Montana"),
-    ("NE", "Nebraska"),
-    ("NV", "Nevada"),
-    ("NH", "New Hampshire"),
-    ("NJ", "New Jersey"),
-    ("NM", "New Mexico"),
-    ("NY", "New York"),
-    ("NC", "North Carolina"),
-    ("ND", "North Dakota"),
-    ("OH", "Ohio"),
-    ("OK", "Oklahoma"),
-    ("OR", "Oregon"),
-    ("PA", "Pennsylvania"),
-    ("RI", "Rhode Island"),
-    ("SC", "South Carolina"),
-    ("SD", "South Dakota"),
-    ("TN", "Tennessee"),
-    ("TX", "Texas"),
-    ("UT", "Utah"),
-    ("VT", "Vermont"),
-    ("VA", "Virginia"),
-    ("WA", "Washington"),
-    ("WV", "West Virginia"),
-    ("WI", "Wisconsin"),
-    ("WY", "Wyoming"),
-]
-
-zip_validator = RegexValidator(
-    r"^\d{5}(-\d{4})?$", "Enter a ZIP code like 79016 or 79016-1234."
-)
 cvv_validator = RegexValidator(r"^\d{3,4}$", "Enter the 3- or 4-digit CVV.")
 
 
@@ -88,6 +33,9 @@ class CheckoutForm(forms.Form):
     shipping_zip = forms.CharField(
         label="ZIP code", max_length=10, validators=[zip_validator]
     )
+    save_shipping_address = forms.BooleanField(
+        label="Save this address to my account", required=False
+    )
 
     billing_name = forms.CharField(label="Full name", max_length=100)
     billing_street = forms.CharField(label="Street address", max_length=200)
@@ -98,6 +46,9 @@ class CheckoutForm(forms.Form):
     billing_state = forms.ChoiceField(label="State", choices=US_STATES)
     billing_zip = forms.CharField(
         label="ZIP code", max_length=10, validators=[zip_validator]
+    )
+    save_billing_address = forms.BooleanField(
+        label="Save this address to my account", required=False
     )
 
     card_number = forms.CharField(
@@ -114,16 +65,22 @@ class CheckoutForm(forms.Form):
             widget = field.widget
             if isinstance(widget, forms.Select):
                 widget.attrs["class"] = "select w-full"
+            elif isinstance(widget, forms.CheckboxInput):
+                widget.attrs["class"] = "checkbox"
             else:
                 widget.attrs["class"] = "input w-full"
 
     # Field groups for the template — the form owns its own structure.
 
+    def address_fields(self, kind):
+        """One address section's fields; ``kind`` is shipping or billing."""
+        return [self[name] for name in self.fields if name.startswith(f"{kind}_")]
+
     def shipping_fields(self):
-        return [self[name] for name in self.fields if name.startswith("shipping_")]
+        return self.address_fields("shipping")
 
     def billing_fields(self):
-        return [self[name] for name in self.fields if name.startswith("billing_")]
+        return self.address_fields("billing")
 
     def card_fields(self):
         return [self[name] for name in self.fields if name.startswith("card_")]

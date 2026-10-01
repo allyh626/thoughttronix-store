@@ -5,11 +5,13 @@ validated checkout into an order, all-or-nothing. Callers never touch
 ``Order`` construction directly.
 """
 
-from collections.abc import Mapping
-from typing import Any
+from collections.abc import Collection, Mapping
+from typing import Any, Literal
 
 from django.contrib.auth.models import AbstractBaseUser
 from django.db import transaction
+
+from accounts.models import Address
 
 from .models import Cart, Order, OrderItem
 
@@ -37,6 +39,7 @@ def place_order(
     checkout_data: Mapping[str, Any],
     *,
     coupon_code: str | None = None,
+    save_addresses: Collection[Literal["shipping", "billing"]] = (),
 ) -> Order:
     """Create an order from the cart's contents, then empty the cart.
 
@@ -46,8 +49,13 @@ def place_order(
     only the last four digits are stored; the full number and CVV never
     touch the database.
 
+    ``save_addresses`` names the checkout sections the customer asked to
+    keep; each is saved to their address book (skipped if they already
+    have it). Saving never sets a default and never links the order to
+    the saved address — the order keeps its own copy.
+
     All-or-nothing: runs in a transaction, so a failure partway through
-    leaves no partial order and the cart intact.
+    leaves no partial order, no saved addresses, and the cart intact.
 
     Raises ``ValueError`` if the cart is empty or holds a product that is
     no longer available.
@@ -77,5 +85,7 @@ def place_order(
             unit_price=line.product.price,
             quantity=line.quantity,
         )
+    for kind in save_addresses:
+        Address.objects.save_from_checkout(user, checkout_data, prefix=kind)
     cart.items.all().delete()
     return order

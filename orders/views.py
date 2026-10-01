@@ -4,17 +4,20 @@ The three HTMX interactions of the core live here: add-to-cart, quantity
 change, and line removal. Each renders a partial (never ``base.html``);
 the responses carry the navbar badge as an out-of-band swap via the
 ``oob_badge`` context flag. Checkout is conventional full-page work:
-validate the form, hand everything to ``place_order``.
+validate the form, hand everything to ``place_order`` — plus one HTMX
+endpoint that fills an address section from the customer's address book.
 """
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
 from django.views.generic import DetailView, FormView, ListView, TemplateView
 
 from accounts.mixins import StaffRequiredMixin
+from accounts.models import Address
 from products.models import Product
 
 from .forms import CheckoutForm, OrderStatusForm
@@ -116,16 +119,67 @@ class CheckoutView(LoginRequiredMixin, FormView):
             return redirect("orders:cart")
         return super().dispatch(request, *args, **kwargs)
 
+    def get_initial(self):
+        """Pre-fill each address section from the customer's default."""
+        initial = super().get_initial()
+        for kind in Address.KINDS:
+            address = self.request.user.addresses.default_for(kind)
+            if address:
+                initial.update(address.as_checkout_initial(kind))
+        return initial
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["cart"] = Cart.for_user(self.request.user)
+        context["saved_addresses"] = self.request.user.addresses.all()
+        # The pickers start on the defaults only on a fresh page; after a
+        # failed POST the fields hold what was typed, not the default.
+        if not context["form"].is_bound:
+            for kind in Address.KINDS:
+                context[f"default_{kind}"] = self.request.user.addresses.default_for(
+                    kind
+                )
         return context
 
     def form_valid(self, form):
         cart = Cart.for_user(self.request.user)
-        order = place_order(cart, self.request.user, form.cleaned_data)
+        order = place_order(
+            cart,
+            self.request.user,
+            form.cleaned_data,
+            save_addresses=[
+                kind
+                for kind in Address.KINDS
+                if form.cleaned_data[f"save_{kind}_address"]
+            ],
+        )
         messages.success(self.request, f"Order {order.number} placed. Thank you!")
         return redirect(reverse("orders:confirmation", kwargs={"pk": order.pk}))
+
+
+class CheckoutAddressFieldsView(LoginRequiredMixin, View):
+    """HTMX: one checkout address section, filled from a saved address.
+
+    The section's dropdown sends ``?address=<pk>``; an empty value is
+    "— New address —" and returns blank fields. The address is fetched
+    through the customer's own book, so anyone else's pk 404s.
+    """
+
+    def get(self, request, kind):
+        if kind not in Address.KINDS:
+            raise Http404
+        initial = {}
+        if pk := request.GET.get("address"):
+            if not pk.isdigit():
+                raise Http404
+            address = get_object_or_404(request.user.addresses, pk=pk)
+            initial = address.as_checkout_initial(kind)
+        form = CheckoutForm(initial=initial)
+        return render(
+            request,
+            "orders/partials/_address_fields.html",
+            {"fields": form.address_fields(kind)},
+        )
 
 
 class OwnOrdersMixin(LoginRequiredMixin):
