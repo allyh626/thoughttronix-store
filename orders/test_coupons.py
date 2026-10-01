@@ -394,7 +394,7 @@ def test_checkout_page_has_the_discount_box(client, customer, cart_item):
 
     page = client.get(reverse("orders:checkout")).content.decode()
 
-    assert "Discount code" in page
+    assert "Have a discount code?" in page
     assert 'id="place-order-total">$699.98' in page
 
 
