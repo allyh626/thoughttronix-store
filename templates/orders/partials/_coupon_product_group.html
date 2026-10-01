@@ -1,0 +1,30 @@
+{# One category's products in the coupon checklist. Include with category #}
+{# and products=[(product, checked), ...]; the buttons re-render this group #}
+{# all ticked or all cleared via orders:coupon_product_group. #}
+<fieldset id="product-group-{{ category.pk }}" class="rounded-box border border-base-300 p-3">
+  <legend class="flex items-center gap-2 px-1 text-sm font-semibold">
+    {{ category.name }}
+    <button type="button"
+            class="btn btn-ghost btn-xs"
+            hx-get="{% url 'orders:coupon_product_group' category.pk %}?checked=1"
+            hx-target="#product-group-{{ category.pk }}"
+            hx-swap="outerHTML">Select all</button>
+    <button type="button"
+            class="btn btn-ghost btn-xs"
+            hx-get="{% url 'orders:coupon_product_group' category.pk %}"
+            hx-target="#product-group-{{ category.pk }}"
+            hx-swap="outerHTML">Clear</button>
+  </legend>
+  <div class="grid gap-1 sm:grid-cols-2">
+    {% for product, checked in products %}
+      <label class="label cursor-pointer justify-start gap-2 text-sm">
+        <input type="checkbox"
+               name="products"
+               value="{{ product.pk }}"
+               class="checkbox checkbox-sm"
+               {% if checked %}checked{% endif %}>
+        <span>{{ product.name }}{% if not product.is_available %} <span class="opacity-50">(unavailable)</span>{% endif %}</span>
+      </label>
+    {% endfor %}
+  </div>
+</fieldset>

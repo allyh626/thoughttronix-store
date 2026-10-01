@@ -28,6 +28,11 @@ urlpatterns = [
         views.CheckoutAddressFieldsView.as_view(),
         name="checkout_address_fields",
     ),
+    path(
+        "checkout/coupon/",
+        views.ApplyCouponView.as_view(),
+        name="checkout_coupon",
+    ),
     path("orders/", views.OrderHistoryView.as_view(), name="history"),
     path("orders/<int:pk>/", views.OrderDetailView.as_view(), name="detail"),
     path(
@@ -50,5 +55,35 @@ urlpatterns = [
         "backoffice/orders/<int:pk>/status/",
         views.UpdateOrderStatusView.as_view(),
         name="manage_order_status",
+    ),
+    path(
+        "backoffice/coupons/",
+        views.ManageCouponListView.as_view(),
+        name="manage_coupons",
+    ),
+    path(
+        "backoffice/coupons/new/",
+        views.ManageCouponCreateView.as_view(),
+        name="manage_coupon_create",
+    ),
+    path(
+        "backoffice/coupons/<int:pk>/edit/",
+        views.ManageCouponUpdateView.as_view(),
+        name="manage_coupon_update",
+    ),
+    path(
+        "backoffice/coupons/<int:pk>/retire/",
+        views.RetireCouponView.as_view(),
+        name="manage_coupon_retire",
+    ),
+    path(
+        "backoffice/coupons/<int:pk>/delete/",
+        views.ManageCouponDeleteView.as_view(),
+        name="manage_coupon_delete",
+    ),
+    path(
+        "backoffice/coupons/products/<int:pk>/",
+        views.CouponProductGroupView.as_view(),
+        name="coupon_product_group",
     ),
 ]

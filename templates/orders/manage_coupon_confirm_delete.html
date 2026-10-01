@@ -1,0 +1,30 @@
+{% extends "backoffice/base.html" %}
+
+{% block title %}Delete coupon — Back office{% endblock %}
+
+{% block backoffice %}
+  <div class="card mx-auto max-w-lg bg-base-100 shadow-md">
+    <div class="card-body">
+      {% if coupon.orders.exists %}
+        <h2 class="card-title">{{ coupon.code }} can't be deleted</h2>
+        <p class="opacity-70">
+          Orders have used this code, so it stays on record. Retire it to stop
+          customers using it — the orders that used it won't change.
+        </p>
+        <div class="mt-4 flex justify-end">
+          <a href="{% url 'orders:manage_coupons' %}" class="btn btn-ghost">Back to coupons</a>
+        </div>
+      {% else %}
+        <h2 class="card-title">Delete {{ coupon.code }}?</h2>
+        <p class="opacity-70">
+          No order has used this code, so nothing else changes. This can't be undone.
+        </p>
+        <form method="post" class="mt-4 flex justify-end gap-2">
+          {% csrf_token %}
+          <a href="{% url 'orders:manage_coupons' %}" class="btn btn-ghost">Cancel</a>
+          <button type="submit" class="btn btn-error">Delete coupon</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

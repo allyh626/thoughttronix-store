@@ -4,25 +4,36 @@ The three HTMX interactions of the core live here: add-to-cart, quantity
 change, and line removal. Each renders a partial (never ``base.html``);
 the responses carry the navbar badge as an out-of-band swap via the
 ``oob_badge`` context flag. Checkout is conventional full-page work:
-validate the form, hand everything to ``place_order`` — plus one HTMX
-endpoint that fills an address section from the customer's address book.
+validate the form, hand everything to ``place_order`` — plus HTMX
+endpoints that fill an address section from the customer's address book
+and apply a coupon to the order summary.
 """
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.messages.views import SuccessMessageMixin
+from django.db.models import Count, ProtectedError
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
+from django.urls import reverse, reverse_lazy
 from django.views import View
-from django.views.generic import DetailView, FormView, ListView, TemplateView
+from django.views.generic import (
+    CreateView,
+    DeleteView,
+    DetailView,
+    FormView,
+    ListView,
+    TemplateView,
+    UpdateView,
+)
 
 from accounts.mixins import StaffRequiredMixin
 from accounts.models import Address
-from products.models import Product
+from products.models import Category, Product
 
-from .forms import CheckoutForm, OrderStatusForm
-from .models import Cart, CartItem, Order
-from .services import place_order
+from .forms import CheckoutForm, CouponForm, OrderStatusForm
+from .models import Cart, CartItem, Coupon, InvalidCoupon, Order
+from .services import place_order, quote
 
 
 class CartView(LoginRequiredMixin, TemplateView):
@@ -88,6 +99,28 @@ class RemoveCartItemView(CartItemActionView):
         item.delete()
 
 
+def order_summary(cart, code="", applied=""):
+    """Context for the checkout order summary with ``code`` tried on it.
+
+    A code that can't be used leaves the previously ``applied`` code in
+    place (if it still works) and carries the reason as ``coupon_error``.
+    """
+    context = {"coupon_input": code}
+    try:
+        context["quote"] = quote(cart, code)
+    except InvalidCoupon as error:
+        context["coupon_error"] = error.message
+        try:
+            context["quote"] = quote(cart, applied)
+        except InvalidCoupon:
+            context["quote"] = quote(cart)
+        return context
+    coupon = context["quote"].coupon
+    if coupon and applied and applied.strip().upper() != coupon.code:
+        context["replaced"] = applied.strip().upper()
+    return context
+
+
 class CheckoutView(LoginRequiredMixin, FormView):
     """The single checkout page: validate the form, hand off to the service.
 
@@ -132,6 +165,10 @@ class CheckoutView(LoginRequiredMixin, FormView):
         context = super().get_context_data(**kwargs)
         context["cart"] = Cart.for_user(self.request.user)
         context["saved_addresses"] = self.request.user.addresses.all()
+        # After a failed POST, re-price with the code that was submitted —
+        # if it stopped working since Apply, the summary says why.
+        code = context["form"].data.get("coupon_code", "")
+        context.update(order_summary(context["cart"], code))
         # The pickers start on the defaults only on a fresh page; after a
         # failed POST the fields hold what was typed, not the default.
         if not context["form"].is_bound:
@@ -143,18 +180,46 @@ class CheckoutView(LoginRequiredMixin, FormView):
 
     def form_valid(self, form):
         cart = Cart.for_user(self.request.user)
-        order = place_order(
-            cart,
-            self.request.user,
-            form.cleaned_data,
-            save_addresses=[
-                kind
-                for kind in Address.KINDS
-                if form.cleaned_data[f"save_{kind}_address"]
-            ],
-        )
+        try:
+            order = place_order(
+                cart,
+                self.request.user,
+                form.cleaned_data,
+                coupon_code=form.cleaned_data["coupon_code"],
+                save_addresses=[
+                    kind
+                    for kind in Address.KINDS
+                    if form.cleaned_data[f"save_{kind}_address"]
+                ],
+            )
+        except InvalidCoupon as error:
+            form.add_error("coupon_code", error)
+            return self.form_invalid(form)
         messages.success(self.request, f"Order {order.number} placed. Thank you!")
         return redirect(reverse("orders:confirmation", kwargs={"pk": order.pk}))
+
+
+class ApplyCouponView(LoginRequiredMixin, View):
+    """HTMX: try a coupon on the cart and re-render the order summary.
+
+    POSTs ``coupon_code`` (the code typed; blank removes the coupon) and
+    ``applied`` (the code already on the summary, kept if the new one
+    fails). Every outcome renders the summary — a bad code is a message
+    in it, never an error page.
+    """
+
+    def post(self, request):
+        cart = Cart.for_user(request.user)
+        context = order_summary(
+            cart,
+            request.POST.get("coupon_code", ""),
+            applied=request.POST.get("applied", ""),
+        )
+        return render(
+            request,
+            "orders/partials/_order_summary.html",
+            {**context, "cart": cart, "oob_total": True},
+        )
 
 
 class CheckoutAddressFieldsView(LoginRequiredMixin, View):
@@ -267,3 +332,109 @@ class UpdateOrderStatusView(StaffRequiredMixin, View):
         else:
             messages.error(request, "That isn't a status an order can have.")
         return redirect("orders:manage_order_detail", pk=order.pk)
+
+
+# Staff-only coupon management, so marketing can run promotions without
+# engineering. Retiring is a reversible switch; a coupon any order used
+# can't be deleted (Order.coupon is PROTECT).
+
+
+class ManageCouponListView(StaffRequiredMixin, ListView):
+    """Every coupon with its use count, filterable via ``?show=active|retired``."""
+
+    template_name = "orders/manage_coupons.html"
+    context_object_name = "coupons"
+    extra_context = {"section": "coupons"}
+
+    def get_queryset(self):
+        coupons = Coupon.objects.annotate(
+            times_used=Count("orders", distinct=True),
+            product_count=Count("products", distinct=True),
+        )
+        show = self.request.GET.get("show", "")
+        if show == "active":
+            coupons = coupons.filter(is_retired=False)
+        elif show == "retired":
+            coupons = coupons.filter(is_retired=True)
+        return coupons
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["show"] = self.request.GET.get("show", "")
+        return context
+
+
+class CouponFormViewMixin(StaffRequiredMixin, SuccessMessageMixin):
+    model = Coupon
+    form_class = CouponForm
+    template_name = "orders/manage_coupon_form.html"
+    success_url = reverse_lazy("orders:manage_coupons")
+    extra_context = {"section": "coupons"}
+
+
+class ManageCouponCreateView(CouponFormViewMixin, CreateView):
+    success_message = "%(code)s created."
+
+
+class ManageCouponUpdateView(CouponFormViewMixin, UpdateView):
+    success_message = "%(code)s saved. Orders that already used it don't change."
+
+
+class CouponProductGroupView(StaffRequiredMixin, View):
+    """HTMX: one category's product checklist, all ticked or all cleared.
+
+    The group's buttons send ``?checked=1`` (select all) or nothing
+    (clear); only that category's checkboxes are swapped.
+    """
+
+    def get(self, request, pk):
+        category = get_object_or_404(Category, pk=pk)
+        checked = request.GET.get("checked") == "1"
+        return render(
+            request,
+            "orders/partials/_coupon_product_group.html",
+            {
+                "category": category,
+                "products": [(p, checked) for p in category.products.all()],
+            },
+        )
+
+
+class RetireCouponView(StaffRequiredMixin, View):
+    """POST-only: flip a coupon between retired and active."""
+
+    def post(self, request, pk):
+        coupon = get_object_or_404(Coupon, pk=pk)
+        if coupon.is_retired:
+            coupon.reinstate()
+            messages.success(request, f"{coupon.code} is active again.")
+        else:
+            coupon.retire()
+            messages.success(
+                request,
+                f"{coupon.code} retired. Customers can no longer use it; "
+                "orders that already did are unchanged.",
+            )
+        return redirect("orders:manage_coupons")
+
+
+class ManageCouponDeleteView(StaffRequiredMixin, SuccessMessageMixin, DeleteView):
+    """Delete an unused coupon; a used one is refused with a nudge to retire."""
+
+    model = Coupon
+    context_object_name = "coupon"
+    template_name = "orders/manage_coupon_confirm_delete.html"
+    success_url = reverse_lazy("orders:manage_coupons")
+    success_message = "Coupon deleted."
+    extra_context = {"section": "coupons"}
+
+    def form_valid(self, form):
+        try:
+            return super().form_valid(form)
+        except ProtectedError:
+            messages.error(
+                self.request,
+                f"{self.object.code} has been used on orders, so it can't be "
+                "deleted. Retire it instead.",
+            )
+            return redirect("orders:manage_coupons")

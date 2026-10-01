@@ -23,7 +23,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from accounts.models import Address
-from orders.models import Cart, Order, OrderItem
+from orders.models import Cart, Coupon, Order, OrderItem
 from products.models import Category, Product, Tag
 
 TAGS = [
@@ -506,6 +506,25 @@ CUSTOMER_ADDRESSES = [
 
 CARD_LAST4S = ["4242", "4111", "1881", "0005"]
 
+# Demo coupons, one in each state the back office shows: (code, kind,
+# value, product slugs — empty for the whole order, first day and last
+# day in days from today, retired).
+COUPONS = [
+    ("FALL20", Coupon.Kind.PERCENT, Decimal("20"), [], -10, 30, False),
+    (
+        "SERAPHINE15",
+        Coupon.Kind.AMOUNT,
+        Decimal("15.00"),
+        ["seraphine", "seraphine-mini"],
+        -5,
+        20,
+        False,
+    ),
+    ("SUMMER10", Coupon.Kind.PERCENT, Decimal("10"), [], -100, -20, False),
+    ("HOLIDAY25", Coupon.Kind.PERCENT, Decimal("25"), [], 40, 70, False),
+    ("LEAKED50", Coupon.Kind.PERCENT, Decimal("50"), [], -3, 10, True),
+]
+
 
 class Command(BaseCommand):
     help = "Wipe and rebuild the demo world: catalog, tags, and demo accounts."
@@ -519,6 +538,7 @@ class Command(BaseCommand):
         self._create_customer_cart()
         self._create_customer_addresses()
         self._create_orders()
+        self._create_coupons()
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -527,6 +547,7 @@ class Command(BaseCommand):
                 f"{Product.objects.count()} products, "
                 f"{get_user_model().objects.count()} users, "
                 f"{Order.objects.count()} orders, "
+                f"{Coupon.objects.count()} coupons, "
                 f"and a live cart and {Address.objects.count()} saved addresses "
                 f"for 'customer'."
             )
@@ -535,6 +556,7 @@ class Command(BaseCommand):
     def _wipe(self):
         """Remove everything the seed owns; the rebuild starts from zero."""
         Order.objects.all().delete()
+        Coupon.objects.all().delete()  # after orders: Order.coupon is PROTECT
         Cart.objects.all().delete()
         Product.objects.all().delete()
         Tag.objects.all().delete()
@@ -675,6 +697,21 @@ class Command(BaseCommand):
                 ],
                 rng=rng,
             )
+
+    def _create_coupons(self):
+        """Dates are relative to today, so every state stays on show."""
+        today = timezone.localdate()
+        for code, kind, value, slugs, start, end, retired in COUPONS:
+            coupon = Coupon.objects.create(
+                code=code,
+                kind=kind,
+                value=value,
+                scope=Coupon.Scope.PRODUCTS if slugs else Coupon.Scope.ORDER,
+                starts_on=today + timedelta(days=start),
+                ends_on=today + timedelta(days=end),
+                is_retired=retired,
+            )
+            coupon.products.set(Product.objects.filter(slug__in=slugs))
 
     def _build_order(self, *, user, created_at, status, lines, rng):
         """One order with denormalized addresses and purchase-time prices."""

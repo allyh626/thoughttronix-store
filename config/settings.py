@@ -121,7 +121,9 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = "UTC"
+# The store's local clock: coupon start/end dates and the dashboard's days
+# follow it. The database still stores UTC (USE_TZ).
+TIME_ZONE = "America/Chicago"
 
 USE_I18N = True
 

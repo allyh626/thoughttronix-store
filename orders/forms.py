@@ -11,8 +11,10 @@ from django import forms
 from django.core.validators import RegexValidator
 
 from accounts.validators import US_STATES, zip_validator
+from products.forms import StyledModelForm
+from products.models import Category
 
-from .models import Order
+from .models import Coupon, Order
 from .validators import validate_card_number, validate_expiry
 
 cvv_validator = RegexValidator(r"^\d{3,4}$", "Enter the 3- or 4-digit CVV.")
@@ -59,6 +61,12 @@ class CheckoutForm(forms.Form):
     )
     card_cvv = forms.CharField(label="CVV", max_length=4, validators=[cvv_validator])
 
+    # The applied coupon, carried from the order summary's Apply button.
+    # Whether it can still be used is place_order's call, not the form's.
+    coupon_code = forms.CharField(
+        max_length=30, required=False, widget=forms.HiddenInput
+    )
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
@@ -84,6 +92,48 @@ class CheckoutForm(forms.Form):
 
     def card_fields(self):
         return [self[name] for name in self.fields if name.startswith("card_")]
+
+
+class CouponForm(StyledModelForm):
+    """The back-office coupon form; the model's ``clean`` checks the numbers.
+
+    Products render as a checklist grouped by category (see
+    ``product_groups``), each group with HTMX select-all/clear buttons.
+    """
+
+    class Meta:
+        model = Coupon
+        fields = ["code", "kind", "value", "scope", "products", "starts_on", "ends_on"]
+        widgets = {
+            "products": forms.CheckboxSelectMultiple,
+            "starts_on": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
+            "ends_on": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
+        }
+
+    def clean_code(self):
+        return self.cleaned_data["code"].strip().upper()
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("scope") == Coupon.Scope.PRODUCTS and not cleaned.get(
+            "products"
+        ):
+            self.add_error("products", "Pick at least one product.")
+        elif cleaned.get("scope") == Coupon.Scope.ORDER:
+            cleaned["products"] = []  # a whole-order code keeps no list
+        return cleaned
+
+    def selected_product_ids(self):
+        return {str(pk) for pk in self["products"].value() or []}
+
+    def product_groups(self):
+        """``[(category, [(product, checked), ...]), ...]`` for the checklist."""
+        selected = self.selected_product_ids()
+        return [
+            (category, [(p, str(p.pk) in selected) for p in category.products.all()])
+            for category in Category.objects.prefetch_related("products")
+            if category.products.all()
+        ]
 
 
 class OrderStatusForm(forms.ModelForm):

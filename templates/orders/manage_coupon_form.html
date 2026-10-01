@@ -1,0 +1,63 @@
+{% extends "backoffice/base.html" %}
+
+{% block title %}
+  {% if form.instance.pk %}Edit coupon{% else %}New coupon{% endif %} — Back office
+{% endblock %}
+
+{% block backoffice %}
+  <div class="card mx-auto max-w-2xl bg-base-100 shadow-md">
+    <div class="card-body">
+      <h2 class="card-title">
+        {% if form.instance.pk %}Edit {{ form.instance.code }}{% else %}New coupon{% endif %}
+      </h2>
+      {% if form.instance.pk %}
+        <p class="text-sm opacity-70">
+          Changes apply to future checkouts only. Orders that already used
+          this code keep the discount they got.
+        </p>
+      {% endif %}
+      <form method="post" class="mt-2 space-y-4">
+        {% csrf_token %}
+        {% for error in form.non_field_errors %}
+          <div class="alert alert-error" role="alert"><span>{{ error }}</span></div>
+        {% endfor %}
+
+        {% include "products/partials/_field.html" with field=form.code %}
+        <div class="grid gap-4 sm:grid-cols-2">
+          {% include "products/partials/_field.html" with field=form.kind %}
+          {% include "products/partials/_field.html" with field=form.value %}
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2">
+          {% include "products/partials/_field.html" with field=form.starts_on %}
+          {% include "products/partials/_field.html" with field=form.ends_on %}
+        </div>
+        <p class="text-xs opacity-60">
+          Dates are store time (Central). The code works from the start of the
+          first day through the end of the last day.
+        </p>
+        {% include "products/partials/_field.html" with field=form.scope %}
+
+        <div>
+          <p class="label mb-1">Products</p>
+          <p class="mb-2 text-xs opacity-60">
+            Only used when the code applies to selected products. Products added
+            to the catalog later aren't included unless you tick them here.
+          </p>
+          <div class="space-y-3">
+            {% for category, products in form.product_groups %}
+              {% include "orders/partials/_coupon_product_group.html" %}
+            {% endfor %}
+          </div>
+          {% for error in form.products.errors %}
+            <p class="mt-1 text-sm text-error">{{ error }}</p>
+          {% endfor %}
+        </div>
+
+        <div class="mt-2 flex items-center justify-end gap-2">
+          <a href="{% url 'orders:manage_coupons' %}" class="btn btn-ghost">Cancel</a>
+          <button type="submit" class="btn btn-primary">Save coupon</button>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

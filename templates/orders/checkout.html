@@ -7,7 +7,7 @@
   <h1 class="text-3xl font-bold">Checkout</h1>
 
   <div class="mt-6 grid gap-8 lg:grid-cols-3">
-    <form method="post" action="{% url 'orders:checkout' %}" class="space-y-6 lg:col-span-2">
+    <form id="checkout-form" method="post" action="{% url 'orders:checkout' %}" class="space-y-6 lg:col-span-2">
       {% csrf_token %}
 
       {% for error in form.non_field_errors %}
@@ -62,7 +62,7 @@
       </section>
 
       <button type="submit" class="btn btn-primary w-full">
-        Place order — ${{ cart.total|intcomma }}
+        Place order — <span id="place-order-total">${{ quote.total|intcomma }}</span>
       </button>
     </form>
 
@@ -79,10 +79,7 @@
             {% endfor %}
           </ul>
           <div class="divider my-2"></div>
-          <p class="flex justify-between font-semibold">
-            <span>Total</span>
-            <span class="text-primary">${{ cart.total|intcomma }}</span>
-          </p>
+          {% include "orders/partials/_order_summary.html" %}
           <a href="{% url 'orders:cart' %}" class="link link-hover text-sm opacity-70">
             Edit cart
           </a>

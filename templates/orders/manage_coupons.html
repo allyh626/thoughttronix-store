@@ -1,0 +1,110 @@
+{% extends "backoffice/base.html" %}
+
+{% block title %}Coupons — Back office{% endblock %}
+
+{% block backoffice %}
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
+    <h2 class="text-xl font-semibold">
+      {{ coupons|length }} coupon{{ coupons|length|pluralize }}
+    </h2>
+    <div class="flex flex-wrap items-center gap-2 text-sm">
+      <span class="opacity-60">Show:</span>
+      <a href="{% querystring show=None %}"
+         class="badge {% if not show %}badge-primary{% else %}badge-ghost{% endif %}">all</a>
+      <a href="{% querystring show='active' %}"
+         class="badge {% if show == 'active' %}badge-primary{% else %}badge-ghost{% endif %}">active</a>
+      <a href="{% querystring show='retired' %}"
+         class="badge {% if show == 'retired' %}badge-primary{% else %}badge-ghost{% endif %}">retired</a>
+      <a href="{% url 'orders:manage_coupon_create' %}" class="btn btn-primary btn-sm ml-2">
+        + Add coupon
+      </a>
+    </div>
+  </div>
+
+  {% if coupons %}
+    <div class="overflow-x-auto rounded-box bg-base-100 shadow-md">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Discount</th>
+            <th>Applies to</th>
+            <th>Runs</th>
+            <th>Status</th>
+            <th>Used</th>
+            <th class="text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for coupon in coupons %}
+            <tr>
+              <td>
+                <a href="{% url 'orders:manage_coupon_update' coupon.pk %}"
+                   class="link-hover font-mono font-semibold">{{ coupon.code }}</a>
+              </td>
+              <td>{{ coupon.label }}</td>
+              <td>
+                {% if coupon.scope == "ORDER" %}
+                  Whole order
+                {% else %}
+                  {{ coupon.product_count }} product{{ coupon.product_count|pluralize }}
+                {% endif %}
+              </td>
+              <td class="whitespace-nowrap">
+                {{ coupon.starts_on|date:"M j" }} – {{ coupon.ends_on|date:"M j, Y" }}
+              </td>
+              <td>
+                {% with status=coupon.status %}
+                  {% if status == "live" %}
+                    <span class="badge badge-success badge-outline">Live</span>
+                  {% elif status == "scheduled" %}
+                    <span class="badge badge-info badge-outline">Scheduled</span>
+                  {% elif status == "expired" %}
+                    <span class="badge badge-ghost">Expired</span>
+                  {% else %}
+                    <span class="badge badge-warning badge-outline">Retired</span>
+                  {% endif %}
+                {% endwith %}
+              </td>
+              <td>{{ coupon.times_used }} order{{ coupon.times_used|pluralize }}</td>
+              <td class="whitespace-nowrap text-right">
+                <a href="{% url 'orders:manage_coupon_update' coupon.pk %}"
+                   class="btn btn-ghost btn-xs">Edit</a>
+                <form method="post"
+                      action="{% url 'orders:manage_coupon_retire' coupon.pk %}"
+                      class="inline">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-ghost btn-xs">
+                    {% if coupon.is_retired %}Reactivate{% else %}Retire{% endif %}
+                  </button>
+                </form>
+                {% if not coupon.times_used %}
+                  <a href="{% url 'orders:manage_coupon_delete' coupon.pk %}"
+                     class="btn btn-ghost btn-xs text-error">Delete</a>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="py-16 text-center">
+      {% if show %}
+        <p class="text-5xl">🗂️</p>
+        <p class="mt-4 text-xl font-semibold">No {{ show }} coupons</p>
+        <p class="mt-2 opacity-70">Every promotion is on the other list.</p>
+        <a href="{% querystring show=None %}" class="btn btn-primary btn-sm mt-6">
+          Show all coupons
+        </a>
+      {% else %}
+        <p class="text-5xl">🎟️</p>
+        <p class="mt-4 text-xl font-semibold">No coupons yet</p>
+        <p class="mt-2 opacity-70">Full price, every thought. Bold strategy.</p>
+        <a href="{% url 'orders:manage_coupon_create' %}" class="btn btn-primary btn-sm mt-6">
+          Create the first coupon
+        </a>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endblock %}

@@ -10,7 +10,7 @@ import pytest
 
 from products.models import Product
 
-from .models import CartItem, Order, OrderItem
+from .models import CartItem, InvalidCoupon, Order, OrderItem
 from .services import place_order
 from .test_checkout_form import VALID_DATA
 
@@ -124,7 +124,17 @@ def test_a_failure_midway_leaves_no_partial_order(
     assert CartItem.objects.count() == 2
 
 
-def test_the_coupon_seam_is_accepted_and_ignored(cart, cart_item, checkout_data):
-    order = place_order(cart, cart.user, checkout_data, coupon_code="THOUGHTS10")
+def test_no_coupon_means_no_discount(cart, cart_item, checkout_data):
+    order = place_order(cart, cart.user, checkout_data, coupon_code="  ")
 
     assert order.total == Decimal("699.98")
+    assert order.discount_amount == Decimal("0.00")
+    assert order.coupon_code == ""
+
+
+def test_an_unknown_coupon_places_no_order(cart, cart_item, checkout_data):
+    with pytest.raises(InvalidCoupon):
+        place_order(cart, cart.user, checkout_data, coupon_code="THOUGHTS10")
+
+    assert not Order.objects.exists()
+    assert cart.items.count() == 1  # the cart is untouched

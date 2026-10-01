@@ -1,0 +1,15 @@
+{# Subtotal and coupon lines above an order's total — only if a code was used. #}
+{# Reads the order's own copy of the code and savings, never the live coupon. #}
+{% load humanize %}
+{% if order.coupon_code %}
+  <dl class="mb-2 space-y-1 text-right text-sm">
+    <div class="flex justify-end gap-4">
+      <dt class="opacity-60">Subtotal</dt>
+      <dd>${{ order.subtotal|intcomma }}</dd>
+    </div>
+    <div class="flex justify-end gap-4 text-success">
+      <dt>{{ order.coupon_code }}</dt>
+      <dd>−${{ order.discount_amount|intcomma }}</dd>
+    </div>
+  </dl>
+{% endif %}
