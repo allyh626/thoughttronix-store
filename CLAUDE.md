@@ -48,30 +48,8 @@ Idiomatic Django throughout: class-based views, model methods, custom
 managers/querysets, forms own their validation. Settings read from `.env`
 via environs with working defaults — the app must run with no `.env` present.
 
-## Template conventions
+## Reference docs — read the one that matches your task
 
-- Every page extends the project-level `templates/base.html` (DaisyUI navbar,
-  footer motto). DaisyUI theme: `night`, set in `assets/css/source.css` and
-  `data-theme` on `<html>`.
-- Back-office pages extend `templates/backoffice/base.html` — the staff shell
-  with the tab rail; the active tab comes from the view's `section` context
-  entry.
-- HTMX endpoints render partials from `templates/<app>/partials/_<name>.html` —
-  prefixed with an underscore, never extending `base.html`.
-- Every list view gets a designed empty state, not a blank page.
-- Styling is Tailwind + DaisyUI classes only; no crispy-forms, no JavaScript
-  beyond HTMX.
-
-## URL conventions
-
-- Every URL is named; every app has a namespace (`products:catalog`,
-  `orders:checkout`).
-- Public catalog URLs use slugs (`/products/seraphine-home-hub/`);
-  back-office URLs use pks.
-- `Product` defines `get_absolute_url`.
-
-## Testing
-
-pytest + pytest-django. Shared fixtures live in the project-level
-`conftest.py` — plain fixtures, no factory-boy. Tests never invoke the seed
-command. The suite must be green at every phase boundary.
+- `docs/CONVENTIONS.md` — before editing templates, styling, HTMX partials,
+  views, or URLs
+- `docs/TESTING.md` — before writing or changing tests
