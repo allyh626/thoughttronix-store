@@ -4,10 +4,13 @@ Shared test data lives here as plain fixtures — no factories. The suite
 grows with the project.
 """
 
+import io
 from decimal import Decimal
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.files.base import ContentFile
+from PIL import Image
 
 from accounts.models import Address
 from orders.models import Cart, CartItem
@@ -53,6 +56,22 @@ def product(category):
         price=Decimal("349.99"),
         category=category,
     )
+
+
+@pytest.fixture
+def media_root(settings, tmp_path):
+    """Uploads go to a throwaway folder; use in every test that writes files."""
+    settings.MEDIA_ROOT = tmp_path / "media"
+    return settings.MEDIA_ROOT
+
+
+@pytest.fixture
+def product_with_image(product, media_root):
+    """The product with a small PNG saved as products/seraphine-home-hub.png."""
+    buffer = io.BytesIO()
+    Image.new("RGB", (40, 30), "purple").save(buffer, "PNG")
+    product.image.save("seraphine-home-hub.png", ContentFile(buffer.getvalue()))
+    return product
 
 
 @pytest.fixture

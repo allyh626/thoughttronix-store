@@ -13,11 +13,16 @@ Demo logins (documented in the README):
 """
 
 import random
+import shutil
 from datetime import timedelta
 from decimal import Decimal
+from pathlib import Path
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.exceptions import ValidationError
+from django.core.files import File
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 from django.utils.text import slugify
@@ -25,6 +30,11 @@ from django.utils.text import slugify
 from accounts.models import Address
 from orders.models import Cart, Coupon, Order, OrderItem
 from products.models import Category, Product, Tag
+from products.validators import validate_product_image
+
+# Product photos, one per slug (products/seed_images/<slug>.png). A product
+# without one keeps its category placeholder.
+SEED_IMAGES_DIR = Path(__file__).resolve().parents[2] / "seed_images"
 
 TAGS = [
     "always listening",
@@ -561,6 +571,8 @@ class Command(BaseCommand):
         Product.objects.all().delete()
         Tag.objects.all().delete()
         Category.objects.all().delete()
+        # Every product image is seed-owned; the rebuild re-attaches them.
+        shutil.rmtree(Path(settings.MEDIA_ROOT) / "products", ignore_errors=True)
 
         managed_usernames = [username for username, *_ in DEMO_USERS] + [
             username for username, *_ in BACKGROUND_CUSTOMERS
@@ -588,6 +600,22 @@ class Command(BaseCommand):
                     category=category,
                 )
                 product.tags.set(tags[tag_name] for tag_name in tag_names)
+                self._attach_image(product)
+
+    def _attach_image(self, product):
+        """Attach seed_images/<slug>.png, through the same validator as uploads."""
+        path = SEED_IMAGES_DIR / f"{product.slug}.png"
+        if not path.exists():
+            return
+        with path.open("rb") as handle:
+            image = File(handle, name=path.name)
+            try:
+                extension = validate_product_image(image)
+            except ValidationError as error:
+                raise CommandError(
+                    f"Seed image {path.name} was rejected: {error.messages[0]}"
+                ) from None
+            product.image.save(f"{product.slug}.{extension}", image)
 
     def _create_users(self):
         User = get_user_model()

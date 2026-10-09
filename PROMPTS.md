@@ -28,6 +28,65 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-09 — Design (via /grill-me) product images for the catalog and back office; hand off to the build session
+
+### Prompts
+1. /grill-me The thoughttronix store needs images displayed on the catalog, located in the product-images folder. Every product currently shows a placeholder, every product must display either its uploaded image when one is available or the existing placeholder. Employees will also upload product images through the back office, validate files are supported before accepting them. Do not accept a file and then discard it. If an uploaded image is not supported display a message informing the employee the uploaded image was rejected and explain the problem in easily understood language. Missing files and broken image icons should not be approved for display.
+2. Option A *(Q1, an `ImageField` with uploads in `media/` and Pillow added)*
+3. Option A *(Q2, accept JPEG, PNG, and WebP only, judged by the file's contents)*
+4. yes lets do option a *(Q3, 5 MB maximum)*
+5. yes option a *(Q4, decode the whole image so damaged files are rejected)*
+6. yes option a *(Q5, a model property falls back to the placeholder if the file is missing)*
+7. is there another image available for the mark II? wouldnt it be redundant to display an image for a product not for sale? *(Q6, which SoulSear product gets the one image)*
+8. yes option a *(Q6 revised, SoulSear Mark II)*
+9. yes option a *(Q7, the SyncRest image without text)*
+10. yes option a *(Q8, move to `products/seed_images/<slug>.png` and commit)*
+11. yes option a *(Q9, the seed empties `media/products/` on wipe)*
+12. yes option a *(Q10, a "Remove current image" checkbox)*
+13. yes option a *(Q11, delete old files after the save commits)*
+14. yes option a *(Q12, error banner plus a field-level reason)*
+15. yes option a *(Q13, 4:3 cropped cards; full image on the detail page)*
+16. yes option a *(Q14, images on the catalog and detail pages plus the edit-form preview only)*
+17. i agree with option b *(Q15, saved filename is `<slug>.<real extension>`)*
+18. i approve of the wording *(Q16, the rejection messages, banner, and help text)*
+19. yes option a *(Q17, the seed validates its images and fails loudly)*
+20. yes option a *(Q18, serve media only while `DEBUG`; gitignore `media/`)*
+21. i thought the change in safety/ was already committed
+22. what was changed in urls.py
+23. now we have come to a shared understanding of the designhave i correctly restored it?
+24. /handoff the next session implements the design we just agreed upon
+25. keep it outside the repo
+26. follow the standard session-log prompt in the header of PROMPTS.md and write the session log for this session
+
+### Summary
+- **Outcome:** An 18-question grill-me interview settled the full design
+  for product images: storage, validation rules, approved rejection
+  wording, the seed image mapping, back-office upload and remove
+  controls, file cleanup, display and cropping, and media serving. No
+  feature code was written. The design and a build plan are recorded in
+  `HANDOFF.md` for the next session. The user discarded a stray
+  formatting-only change to `config/urls.py` themselves with
+  `git restore`, and I confirmed the working tree is clean apart from
+  `product-images/`, plus the new `HANDOFF.md` and this entry.
+- **Deviations:** In Q6, the user challenged my first recommendation
+  (SoulSear Mark I) by asking whether Mark II had its own image (it
+  doesn't) and whether showing the only image on a product nobody can
+  buy was wasteful. I changed my recommendation to Mark II, and the user
+  took it. Every other question took the recommended answer. Follow-up
+  questions covered the `config/urls.py` change: whether `safety/` was
+  already committed (the route was, in `b9ce176`, and only a one-line
+  reformat was uncommitted), what exactly had changed, and whether the
+  restore worked (it did). I twice offered to write a PRD and plan in
+  `prd/` and `plans/`. The user didn't take it up and asked for a handoff
+  instead. On the unused `SyncRest GPT Text.png`, the user chose to keep
+  it outside the repo; the next session will ask where.
+- **Sideways:** My first Q6 recommendation missed that the image does
+  more work on a product customers can buy. The user caught it. I also
+  said the user had "squashed" the `safety/` route onto one line. What
+  actually caused that change is unknown (most likely an editor
+  auto-format), and I corrected the wording when asked. No tests or lint
+  were run because no code changed.
+
 ## 2026-10-01 — Design (via /grill-me) and build discount codes for seasonal promotions
 
 ### Prompts

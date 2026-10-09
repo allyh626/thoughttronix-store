@@ -1,9 +1,14 @@
-from django.db import models
+from pathlib import Path
+
+from django.db import models, transaction
+from django.templatetags.static import static
 from django.urls import reverse
 
+from .validators import IMAGE_HELP_TEXT
+
 # Categories with a dedicated placeholder illustration; anything else
-# falls back to default.svg. No media handling in the core — placeholder
-# images are static files chosen by category.
+# falls back to default.svg. A product without an uploaded image shows
+# its category's placeholder, a static file.
 PLACEHOLDER_CATEGORIES = {
     "home-assistants",
     "neural-implants",
@@ -58,6 +63,16 @@ class ProductQuerySet(models.QuerySet):
         )
 
 
+def product_image_path(instance, filename):
+    """Save uploads as ``products/<slug>.<ext>``.
+
+    The extension is already the detected format's (the upload field
+    renames the file after validating it); storage adds a random suffix
+    if the name is taken.
+    """
+    return f"products/{instance.slug}{Path(filename).suffix.lower()}"
+
+
 class Product(models.Model):
     name = models.CharField(max_length=200)
     slug = models.SlugField(max_length=200, unique=True)
@@ -72,6 +87,12 @@ class Product(models.Model):
         related_name="products",
     )
     tags = models.ManyToManyField(Tag, blank=True, related_name="products")
+    image = models.ImageField(
+        upload_to=product_image_path,
+        max_length=255,
+        blank=True,
+        help_text=IMAGE_HELP_TEXT,
+    )
 
     objects = ProductQuerySet.as_manager()
 
@@ -81,5 +102,44 @@ class Product(models.Model):
     def __str__(self):
         return self.name
 
+    def save(self, *args, **kwargs):
+        """Save, then delete the replaced or cleared image file after commit."""
+        old_name = ""
+        if self.pk:
+            old_name = (
+                Product.objects.filter(pk=self.pk)
+                .values_list("image", flat=True)
+                .first()
+                or ""
+            )
+        super().save(*args, **kwargs)
+        if old_name and old_name != self.image.name:
+            self._delete_image_file_on_commit(old_name)
+
     def get_absolute_url(self):
         return reverse("products:detail", kwargs={"slug": self.slug})
+
+    def delete(self, *args, **kwargs):
+        """Delete, then delete the image file after commit."""
+        name = self.image.name
+        result = super().delete(*args, **kwargs)
+        if name:
+            self._delete_image_file_on_commit(name)
+        return result
+
+    @property
+    def display_image_url(self):
+        """The uploaded image's URL, or the category placeholder's.
+
+        Falls back when there is no image, and also when the file is
+        missing from storage, so the store never shows a broken image.
+        """
+        if self.image and self.image.storage.exists(self.image.name):
+            return self.image.url
+        return static(self.category.placeholder_image)
+
+    def _delete_image_file_on_commit(self, name):
+        # Only once the database change is permanent: a rolled-back save
+        # or delete must still find its file.
+        storage = self.image.storage
+        transaction.on_commit(lambda: storage.delete(name))

@@ -8,7 +8,11 @@
     </label>
   {% else %}
     <label class="label mb-1" for="{{ field.id_for_label }}">{{ field.label }}</label>
-    {{ field }}
+    {% if field.name == "image" %}
+      {% include "products/partials/_image_field.html" %}
+    {% else %}
+      {{ field }}
+    {% endif %}
   {% endif %}
   {% if field.help_text %}
     <p class="mt-1 text-xs opacity-60">{{ field.help_text }}</p>

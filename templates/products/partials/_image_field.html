@@ -1,0 +1,12 @@
+{# The product image widget: current-image preview, file input, remove checkbox. #}
+{# The checkbox name is ClearableFileInput's "<name>-clear", so Django reads it. #}
+{% if field.initial %}
+  <img src="{{ field.initial.url }}" alt="Current image" class="mb-2 max-h-48 rounded-box" />
+{% endif %}
+{{ field }}
+{% if field.initial %}
+  <label class="label mt-2 cursor-pointer justify-start gap-2" for="{{ field.html_name }}-clear_id">
+    <input type="checkbox" name="{{ field.html_name }}-clear" id="{{ field.html_name }}-clear_id" class="checkbox checkbox-sm" />
+    <span>Remove current image</span>
+  </label>
+{% endif %}
