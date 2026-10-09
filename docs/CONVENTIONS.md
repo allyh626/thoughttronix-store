@@ -13,6 +13,7 @@
 - Every list view gets a designed empty state, not a blank page.
 - Styling is Tailwind + DaisyUI classes only; no crispy-forms, no JavaScript
   beyond HTMX.
+- Every page opens with an h1 using text-3xl font-bold, followed by a one-line description using opacity-70.
 
 ## URL conventions
 
