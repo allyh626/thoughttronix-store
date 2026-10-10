@@ -28,6 +28,78 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-09 — Build product images (uploads, validation, cleanup, display, seed) from the handoff
+
+### Prompts
+1. @HANDOFF.md Implement this feature
+2. *(Correction: rejected my question about how to work and where to put the unused image, to clarify first.)* can you implement the changes but get my permission and show me what change is being made before it is done? and you can just delete the unused image
+3. can you fix the HEIC file inconsistency and correctly inform them that it is a HEIC (iphone) photo?
+4. what steps do i take to manually verify the feature in the browser
+5. yes if you could implement the test files
+6. delete the tests folder? *(Correction: rejected my attempt to delete `Desktop\image-test-files`.)*
+7. how can i run and check the test files just created?
+8. uv run python manage.py seedhasa the handoff file been deleted?
+9. yes can you delete it
+10. write the session log for the implementation of the feature with the prompt in the prompts.md header
+
+### Summary
+- **Outcome:** Built the product-image design from `HANDOFF.md`:
+  - Pillow added. `MEDIA_ROOT`/`MEDIA_URL` added, with defaults. Media
+    served only while `DEBUG`. `media/` gitignored.
+  - `Product.image`, plus migration `0004_product_image.py`.
+  - One validator, `products/validators.py`, shared by the upload form
+    and the seed, using the approved wording.
+  - `ProductImageField` replaces Django's `forms.ImageField`, so only
+    those messages are shown. Uploads are renamed to `<slug>.<detected
+    extension>`.
+  - The edit form got a preview, a DaisyUI `file-input`, a "Remove
+    current image" checkbox (`_image_field.html`), `enctype`, and the
+    rejection banner.
+  - Old image files are deleted after commit, from `Product.save()` and
+    `Product.delete()`.
+  - `display_image_url` is used on the catalog (4:3 crop) and the detail
+    page (uncropped, height-capped).
+  - The 12 images moved to `products/seed_images/<slug>.png`. The seed
+    validates and attaches them and empties `media/products/` on wipe.
+  - 24 tests added in `products/test_images.py`, with `media_root` and
+    `product_with_image` fixtures. The two existing seed tests now use
+    `media_root`.
+
+  On request, HEIC files are recognized by their header bytes and get
+  the "unsupported type" message as "HEIC (iPhone)", where they used to
+  get "isn't an image file". I generated 11 manual-test files in
+  `Desktop\image-test-files` (outside the repo) and wrote browser
+  verification steps. Final state: 303 passed, and `ruff check` and
+  `ruff format` are clean. Nothing committed.
+- **Deviations:**
+  - The user changed the working mode from their saved preference (typing
+    edits themselves) to me applying each edit after they approve it. I
+    updated the saved memory.
+  - The previous session planned to keep `SyncRest GPT Text.png` outside
+    the repo. The user chose to delete it instead.
+  - The "HEIC (iPhone)" wording is my fill of the approved
+    `<FORMAT>` template, not wording the user approved separately.
+  - Follow-up questions: how to verify in the browser, how to use the
+    test files, and whether `HANDOFF.md` was deleted. The user then asked
+    for it to be deleted, and it was.
+  - The handoff's suggested `run`, `code-review`, and `simplify` skills
+    weren't used, and I didn't run the seed against the user's own
+    database or check anything in a browser.
+- **Sideways:**
+  - `ruff check` failed twice on DJ012 (model method order). While fixing
+    it, I duplicated `_delete_image_file_on_commit`. I caught that by
+    reading the file back and removed the duplicate.
+  - I told the user I'd added "25 new tests". There were 23 (24 after the
+    HEIC case). The miscount was found while writing this log.
+  - The handoff said Django's model `ImageField` adds the extension
+    validator. It's only the form field, so replacing the form field was
+    enough.
+  - I read "delete the tests folder?" as a request and tried to delete
+    the Desktop test files. The user rejected it, so the folder still
+    exists.
+  - As in earlier sessions, every `uv run` printed the harmless
+    `VIRTUAL_ENV` mismatch warning.
+
 ## 2026-10-09 — Design (via /grill-me) product images for the catalog and back office; hand off to the build session
 
 ### Prompts

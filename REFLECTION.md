@@ -1,3 +1,14 @@
+### PRODUCT IMAGES
+## QUESTION 01
+    A gril me decision that I had questioned the agents reccomendation on was the duplicate photo which I chose to use one and discard the other, I was debating on saving it in the repo elsewhere but thought it would be redundant so I just chose one. This was just a slight deviation from what the agent origianllly recommended but it was one of the only times I felt the agent didn't recommend exactly what I wanted implemented. Anytime I feel confused on a piece of information it gives me I ask follow up questions and often times don't need toa sk more than one follow-up question to improve my understanding.
+
+## QUESTION 02
+    1. The image field added to the product model can be found in products/models.py in lines 90-95, and reads as such: image = models.ImageField( upload_to=product_image_path, max_length=255, blank=True, help_text=IMAGE_HELP_TEXT,)". the upload_to value determines the location of the stored image in Django's media storage location.
+    2. The opening form tag found in templates/products/manage_product_form.html is written as: <form method="post" enctype="multipart/form-data" class="mt-2 space-y-4"> in line 13. enctype is needed for the file upload so the file itself is sent by the browser and not just the file name. This ensures all other fields regarding the image are sent with the file.
+
+## QUESTION 03
+    The upload process for the product image I uploaded starts in the location the file is stored on the disk: C: /Users/ally/CIDM3312/thoughttronix-store/media/products/mnemo.jpg, determined by the MEDIA_ROOT setting in config/settings.py. The value stored in the image field is denoted as products/mnemo.jpg, defined in the product model. The URL the browser then requests is served at /media/products/mnemo.jpg, which is defined in the MEDIA_URL setting in config/settings.py file. The static() tag in config/urls.py maps requests beginning with the MEDIA_URL to files under the MEDIA_ROOT which allows uploaded product images to display while the development server is running.
+
 ### DISCOUNT COUPONS
 ## QUESTION 01
     One decision from grill me that led to an important decision on how the coupons are tracked, displayed, promoted, and regarded by the codebase was the timezone used by the store to manage the use of the coupon codes. I was debating between using the stores local timezone to dictate coupon requirements and leaving the store on UTC time and having a separate clock for the coupons to only use their own time zone setting. I felt both options were worth implementing but knew that having two separate clocks used by the store is redundant and can just be communicated that the coupons follow the stores local time which I have set to U.S. Central time.
