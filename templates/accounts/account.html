@@ -7,6 +7,28 @@
   <p class="mt-1 opacity-70">Signed in as <span class="font-semibold">{{ user.username }}</span></p>
 
   <section class="mt-8">
+    <h2 class="text-xl font-semibold">Sign-in &amp; security</h2>
+
+    <div class="card mt-4 bg-base-100 shadow-md">
+      <div class="card-body">
+        <h3 class="card-title text-base">Email</h3>
+        {% if user.email %}
+          <div class="flex flex-wrap items-center gap-2">
+            <span>{{ user.email }}</span>
+            {% if user.email_verified %}
+              <span class="badge badge-success badge-sm">Verified</span>
+            {% else %}
+              <span class="badge badge-warning badge-sm">Unverified</span>
+            {% endif %}
+          </div>
+        {% else %}
+          <p class="text-sm opacity-70">No email on file.</p>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <section class="mt-8">
     <div class="flex items-center justify-between gap-4">
       <h2 class="text-xl font-semibold">Saved addresses</h2>
       <a href="{% url 'accounts:address_create' %}" class="btn btn-primary btn-sm">Add address</a>

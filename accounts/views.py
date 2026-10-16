@@ -46,8 +46,8 @@ class SignOutView(LogoutView):
 
 
 class AccountView(LoginRequiredMixin, TemplateView):
-    """My account: the username, then the address book. Future account
-    features arrive as new sections on this page."""
+    """My account: the username, sign-in & security, then the address book.
+    Future account features arrive as new sections on this page."""
 
     template_name = "accounts/account.html"
 

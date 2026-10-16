@@ -235,6 +235,7 @@ def test_seed_builds_the_demo_world(db, media_root):
     assert [a.label for a in customer.addresses.all()] == ["Home", "Work"]
     assert customer.addresses.default_for("shipping").label == "Home"
     assert customer.addresses.default_for("billing").label == "Home"
+    assert not User.objects.filter(email_verified=False).exists()
 
     mark_one = Product.objects.get(slug="soulsear-mark-i")
     assert not mark_one.is_available

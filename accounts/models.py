@@ -21,6 +21,19 @@ class User(AbstractUser):
 
     # Nullable per the PRD: an absent job title is unknown, not empty.
     job_title = models.CharField(max_length=150, null=True, blank=True)  # noqa: DJ001
+    # Unique but nullable: accounts made before emails were required have
+    # none, and NULLs never collide. Stored lowercase (see ``save``), so
+    # uniqueness ignores capitalization.
+    email = models.EmailField(  # noqa: DJ001
+        "email address", unique=True, null=True, blank=True
+    )
+    email_verified = models.BooleanField(default=False)
+
+    def save(self, *args, **kwargs):
+        # Django's user manager turns a missing email into "", which would
+        # collide under the unique rule — store it as NULL instead.
+        self.email = self.email.strip().lower() if self.email else None
+        super().save(*args, **kwargs)
 
 
 class AddressQuerySet(models.QuerySet):

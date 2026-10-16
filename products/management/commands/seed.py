@@ -623,6 +623,7 @@ class Command(BaseCommand):
             user = User(
                 username=username,
                 email=email,
+                email_verified=True,
                 first_name=first,
                 last_name=last,
                 is_staff=staff,
@@ -636,6 +637,7 @@ class Command(BaseCommand):
             user = User(
                 username=username,
                 email=f"{username}@example.com",
+                email_verified=True,
                 first_name=first,
                 last_name=last,
             )
