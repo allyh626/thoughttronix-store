@@ -1,6 +1,7 @@
 """The Account Security Center: emails on the user, signup's email rules,
-and the Sign-in & security section of My account."""
+verification links, and the Sign-in & security section of My account."""
 
+import re
 from http import HTTPStatus
 
 import pytest
@@ -126,3 +127,158 @@ def test_security_section_shows_when_there_is_no_email(client, customer):
     page = client.get(reverse("accounts:account")).content.decode()
 
     assert "No email on file." in page
+
+
+# --- Verification links -------------------------------------------------------
+
+
+def link_in(message):
+    """The verification link's path, pulled from an email's body."""
+    return re.search(r"https?://[^/\s]+(/\S+)", message.body).group(1)
+
+
+@pytest.fixture
+def unverified(customer):
+    customer.email = "customer@example.com"
+    customer.save()
+    return customer
+
+
+def test_signup_sends_a_verification_email_then_redirects_to_sign_in(
+    client, db, mailoutbox
+):
+    response = client.post(reverse("accounts:signup"), SIGNUP_DATA)
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.url == reverse("accounts:login")
+    assert len(mailoutbox) == 1
+    assert mailoutbox[0].to == ["fresh@example.com"]
+    assert "/accounts/verify-email/" in mailoutbox[0].body
+
+
+def test_following_the_signup_link_verifies_the_email(client, db, mailoutbox):
+    client.post(reverse("accounts:signup"), SIGNUP_DATA)
+
+    response = client.get(link_in(mailoutbox[0]), follow=True)
+
+    assert get_user_model().objects.get(username="fresh-thinker").email_verified
+    assert "fresh@example.com is verified" in response.content.decode()
+
+
+def test_a_signed_in_customer_returns_to_my_account(client, unverified, mailoutbox):
+    unverified.send_verification_email(client.get("/").wsgi_request)
+    client.force_login(unverified)
+
+    response = client.get(link_in(mailoutbox[0]))
+
+    assert response.url == reverse("accounts:account")
+
+
+def test_a_used_link_stops_working(client, unverified, mailoutbox):
+    unverified.send_verification_email(client.get("/").wsgi_request)
+    link = link_in(mailoutbox[0])
+    client.get(link)
+
+    response = client.get(link)
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert "verification link doesn't work" in response.content.decode()
+
+
+def test_an_expired_link_stops_working(client, unverified, mailoutbox, settings):
+    unverified.send_verification_email(client.get("/").wsgi_request)
+    settings.EMAIL_VERIFICATION_TIMEOUT = -1
+
+    response = client.get(link_in(mailoutbox[0]))
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    unverified.refresh_from_db()
+    assert not unverified.email_verified
+
+
+def test_a_tampered_link_stops_working(client, unverified):
+    token = unverified.email_verification_token()
+
+    response = client.get(reverse("accounts:verify_email", args=[token + "x"]))
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    unverified.refresh_from_db()
+    assert not unverified.email_verified
+
+
+def test_a_link_for_a_replaced_address_stops_working(client, unverified):
+    token = unverified.email_verification_token()
+    unverified.email = "new@example.com"
+    unverified.save()
+
+    response = client.get(reverse("accounts:verify_email", args=[token]))
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_the_error_page_offers_a_way_to_resend(client, db):
+    response = client.get(reverse("accounts:verify_email", args=["nonsense"]))
+
+    assert reverse("accounts:account") in response.content.decode()
+    assert "Resend verification email" in response.content.decode()
+
+
+# --- Resend -------------------------------------------------------------------
+
+
+def test_resend_button_shows_for_an_unverified_email(client, unverified):
+    client.force_login(unverified)
+
+    page = client.get(reverse("accounts:account")).content.decode()
+
+    assert "Resend verification email" in page
+
+
+def test_resend_button_is_hidden_for_a_verified_email(client, unverified):
+    unverified.email_verified = True
+    unverified.save()
+    client.force_login(unverified)
+
+    page = client.get(reverse("accounts:account")).content.decode()
+
+    assert "Resend verification email" not in page
+
+
+def test_resend_button_is_hidden_with_no_email(client, customer):
+    client.force_login(customer)
+
+    page = client.get(reverse("accounts:account")).content.decode()
+
+    assert "Resend verification email" not in page
+
+
+def test_resend_sends_a_fresh_link_that_works(client, unverified, mailoutbox):
+    client.force_login(unverified)
+
+    response = client.post(reverse("accounts:resend_verification"), follow=True)
+
+    assert "Verification email sent to customer@example.com." in (
+        response.content.decode()
+    )
+    assert mailoutbox[0].to == ["customer@example.com"]
+    client.get(link_in(mailoutbox[0]))
+    unverified.refresh_from_db()
+    assert unverified.email_verified
+
+
+def test_resend_sends_nothing_for_a_verified_email(client, unverified, mailoutbox):
+    unverified.email_verified = True
+    unverified.save()
+    client.force_login(unverified)
+
+    client.post(reverse("accounts:resend_verification"))
+
+    assert mailoutbox == []
+
+
+def test_resend_requires_sign_in(client, db, mailoutbox):
+    response = client.post(reverse("accounts:resend_verification"))
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert reverse("accounts:login") in response.url
+    assert mailoutbox == []

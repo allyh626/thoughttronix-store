@@ -21,6 +21,12 @@
               <span class="badge badge-warning badge-sm">Unverified</span>
             {% endif %}
           </div>
+          {% if not user.email_verified %}
+            <form method="post" action="{% url 'accounts:resend_verification' %}" class="card-actions mt-2">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-outline btn-xs">Resend verification email</button>
+            </form>
+          {% endif %}
         {% else %}
           <p class="text-sm opacity-70">No email on file.</p>
         {% endif %}

@@ -2,18 +2,20 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView
 from django.contrib.messages.views import SuccessMessageMixin
+from django.core import signing
 from django.http import Http404
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.views import View
 from django.views.generic import CreateView, DeleteView, TemplateView, UpdateView
 
 from .forms import AddressForm, SignInForm, SignupForm
-from .models import Address
+from .models import Address, User
 
 
 class SignupView(SuccessMessageMixin, CreateView):
-    """Create a customer account, then hand off to the login page.
+    """Create a customer account, mail a verification link, then hand off
+    to the login page.
 
     New users sign in themselves — auto-login after signup is left as a
     student exercise.
@@ -22,7 +24,42 @@ class SignupView(SuccessMessageMixin, CreateView):
     form_class = SignupForm
     template_name = "accounts/signup.html"
     success_url = reverse_lazy("accounts:login")
-    success_message = "Account created — you can now sign in."
+    success_message = (
+        "Account created — check your email for a verification link, then sign in."
+    )
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        self.object.send_verification_email(self.request)
+        return response
+
+
+class VerifyEmailView(View):
+    """The link from a verification email. No sign-in needed — the signed
+    token says who it is for."""
+
+    def get(self, request, token):
+        try:
+            user = User.verify_email_token(token)
+        except signing.BadSignature:
+            return render(request, "accounts/verify_email_failed.html", status=400)
+        messages.success(request, f"Thanks — {user.email} is verified.")
+        return redirect(
+            "accounts:account" if request.user.is_authenticated else "accounts:login"
+        )
+
+
+class ResendVerificationView(LoginRequiredMixin, View):
+    """POST-only: mail a fresh verification link for an unverified email."""
+
+    def post(self, request):
+        user = request.user
+        if user.email and not user.email_verified:
+            user.send_verification_email(request)
+            messages.success(request, f"Verification email sent to {user.email}.")
+        else:
+            messages.info(request, "There's no unverified email to confirm.")
+        return redirect("accounts:account")
 
 
 class SignInView(LoginView):

@@ -155,6 +155,28 @@ TAILWIND_CLI_VERSION = "2.9.2"
 TAILWIND_CLI_SRC_CSS = "assets/css/source.css"
 
 
-# Email — console backend only; real mail is out of scope for the core.
+# Email — the default backend prints every message's plain text to the
+# terminal running the dev server, so links copy cleanly. Set EMAIL_BACKEND
+# and the SMTP keys in .env for real mail.
 
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+EMAIL_BACKEND = env.str(
+    "EMAIL_BACKEND", default="config.email_backends.ReadableConsoleEmailBackend"
+)
+
+EMAIL_HOST = env.str("EMAIL_HOST", default="localhost")
+
+EMAIL_PORT = env.int("EMAIL_PORT", default=25)
+
+EMAIL_HOST_USER = env.str("EMAIL_HOST_USER", default="")
+
+EMAIL_HOST_PASSWORD = env.str("EMAIL_HOST_PASSWORD", default="")
+
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=False)
+
+DEFAULT_FROM_EMAIL = env.str(
+    "DEFAULT_FROM_EMAIL",
+    default="The ThoughtTronix Store <no-reply@thoughttronix.example>",
+)
+
+# How long an email verification link stays valid, in seconds (3 days).
+EMAIL_VERIFICATION_TIMEOUT = 60 * 60 * 24 * 3

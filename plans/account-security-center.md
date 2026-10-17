@@ -81,18 +81,18 @@ link.
 
 ### Acceptance criteria
 
-- [ ] `EMAIL_BACKEND`, host, port, user, password, and TLS are read from the
+- [x] `EMAIL_BACKEND`, host, port, user, password, and TLS are read from the
       environment, defaulting to the console backend, and the new keys are
       documented in the example env file
-- [ ] `DEFAULT_FROM_EMAIL` and the 3-day verification setting exist
-- [ ] Signup sends a plain-text verify-email message, then still redirects to
+- [x] `DEFAULT_FROM_EMAIL` and the 3-day verification setting exist
+- [x] Signup sends a plain-text verify-email message, then still redirects to
       sign-in
-- [ ] The verify view accepts a signed, time-limited token tied to the
+- [x] The verify view accepts a signed, time-limited token tied to the
       address being confirmed, and marks it verified
-- [ ] Used, expired, or tampered links show a clear error with a way to
+- [x] Used, expired, or tampered links show a clear error with a way to
       resend
-- [ ] The Resend button appears only when the email is unverified
-- [ ] Tests use Django's in-memory outbox to check the mail and follow the
+- [x] The Resend button appears only when the email is unverified
+- [x] Tests use Django's in-memory outbox to check the mail and follow the
       link
 
 ---

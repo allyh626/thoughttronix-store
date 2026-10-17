@@ -3,13 +3,19 @@ from typing import Any
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
+from django.core import signing
 from django.db import models, transaction
+from django.template.loader import render_to_string
+from django.urls import reverse
 
 from .validators import US_STATES, zip_validator
 
 # The fields one checkout address section holds, without its prefix:
 # ``shipping_city`` and ``billing_city`` both map to ``Address.city``.
 ADDRESS_FIELDS = ["name", "street", "line2", "city", "state", "zip"]
+
+# Keeps verification tokens from being valid anywhere else Django signs data.
+VERIFY_EMAIL_SALT = "accounts.verify-email"
 
 
 class User(AbstractUser):
@@ -34,6 +40,46 @@ class User(AbstractUser):
         # collide under the unique rule — store it as NULL instead.
         self.email = self.email.strip().lower() if self.email else None
         super().save(*args, **kwargs)
+
+    def email_verification_token(self) -> str:
+        """A signed, timestamped token that confirms the current email.
+
+        It names the address itself, so it stops working once that
+        address is verified or replaced.
+        """
+        return signing.dumps(
+            {"user": self.pk, "email": self.email}, salt=VERIFY_EMAIL_SALT
+        )
+
+    def send_verification_email(self, request) -> None:
+        """Mail a verification link for the current email to that address."""
+        path = reverse("accounts:verify_email", args=[self.email_verification_token()])
+        message = render_to_string(
+            "accounts/emails/verify_email.txt",
+            {"user": self, "verify_url": request.build_absolute_uri(path)},
+        )
+        self.email_user("Confirm your ThoughtTronix email", message)
+
+    @classmethod
+    def verify_email_token(cls, token: str) -> "User":
+        """Mark the address named in ``token`` verified and return its user.
+
+        Raises ``signing.BadSignature`` when the token is tampered with or
+        already used (its address is no longer this account's unverified
+        email), and its subclass ``signing.SignatureExpired`` when it is
+        older than ``EMAIL_VERIFICATION_TIMEOUT``.
+        """
+        data = signing.loads(
+            token, salt=VERIFY_EMAIL_SALT, max_age=settings.EMAIL_VERIFICATION_TIMEOUT
+        )
+        user = cls.objects.filter(
+            pk=data["user"], email=data["email"], email_verified=False
+        ).first()
+        if user is None:
+            raise signing.BadSignature("This link has already been used.")
+        user.email_verified = True
+        user.save(update_fields=["email_verified"])
+        return user
 
 
 class AddressQuerySet(models.QuerySet):

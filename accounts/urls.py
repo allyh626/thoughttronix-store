@@ -9,6 +9,17 @@ urlpatterns = [
     path("signup/", views.SignupView.as_view(), name="signup"),
     path("login/", views.SignInView.as_view(), name="login"),
     path("logout/", views.SignOutView.as_view(), name="logout"),
+    # Before the token route, or "resend" would be read as a token.
+    path(
+        "verify-email/resend/",
+        views.ResendVerificationView.as_view(),
+        name="resend_verification",
+    ),
+    path(
+        "verify-email/<str:token>/",
+        views.VerifyEmailView.as_view(),
+        name="verify_email",
+    ),
     path("addresses/new/", views.AddressCreateView.as_view(), name="address_create"),
     path(
         "addresses/<int:pk>/edit/",
