@@ -2,10 +2,12 @@
 verification links, and the Sign-in & security section of My account."""
 
 import re
+from datetime import datetime, timedelta
 from http import HTTPStatus
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.contrib.auth.tokens import default_token_generator
 from django.db import IntegrityError, transaction
 from django.test import Client
 from django.urls import reverse
@@ -600,3 +602,129 @@ def test_change_password_mails_nothing_without_an_email(client, customer, mailou
     change_password(client)
 
     assert mailoutbox == []
+
+
+# --- Forgotten password -------------------------------------------------------
+
+
+def request_reset(client, email):
+    return client.post(reverse("accounts:password_reset"), {"email": email})
+
+
+def open_reset_link(client, message):
+    """Follow the emailed link. Django swaps the token for a session value
+    and redirects, so the form lives at the last URL in the chain."""
+    return client.get(link_in(message), follow=True)
+
+
+def reset_password(client, message, new=NEW_PASSWORD):
+    response = open_reset_link(client, message)
+    return client.post(
+        response.redirect_chain[-1][0],
+        {"new_password1": new, "new_password2": new},
+        follow=True,
+    )
+
+
+def test_sign_in_page_links_to_password_reset(client, db):
+    page = client.get(reverse("accounts:login")).content.decode()
+
+    assert reverse("accounts:password_reset") in page
+    assert "Forgot password?" in page
+
+
+def test_password_reset_timeout_is_one_hour(settings):
+    assert settings.PASSWORD_RESET_TIMEOUT == 60 * 60
+
+
+def test_reset_mails_a_link_to_a_verified_email(client, verified, mailoutbox):
+    response = request_reset(client, "OLD@Example.com")
+
+    assert response.url == reverse("accounts:password_reset_done")
+    assert len(mailoutbox) == 1
+    assert mailoutbox[0].to == ["old@example.com"]
+    assert mailoutbox[0].subject == "Reset your ThoughtTronix password"
+    assert "/accounts/password/reset/" in mailoutbox[0].body
+
+
+def test_reset_mails_nothing_to_an_unverified_email(client, unverified, mailoutbox):
+    request_reset(client, "customer@example.com")
+
+    assert mailoutbox == []
+
+
+def test_reset_mails_nothing_to_an_unknown_email(client, db, mailoutbox):
+    request_reset(client, "nobody@example.com")
+
+    assert mailoutbox == []
+
+
+def test_reset_mails_nothing_to_an_inactive_account(client, verified, mailoutbox):
+    verified.is_active = False
+    verified.save()
+
+    request_reset(client, "old@example.com")
+
+    assert mailoutbox == []
+
+
+def test_reset_request_looks_the_same_for_every_email(client, verified, other_customer):
+    other_customer.email = "unverified@example.com"
+    other_customer.save()
+
+    responses = [
+        request_reset(client, email)
+        for email in ("old@example.com", "unverified@example.com", "nobody@example.com")
+    ]
+
+    assert {(r.status_code, r.url) for r in responses} == {
+        (HTTPStatus.FOUND, reverse("accounts:password_reset_done"))
+    }
+    page = client.get(reverse("accounts:password_reset_done")).content.decode()
+    assert "Check your email" in page
+
+
+def test_reset_leads_to_sign_in_without_signing_in(client, verified, mailoutbox):
+    request_reset(client, "old@example.com")
+
+    response = reset_password(client, mailoutbox[0])
+
+    assert response.redirect_chain[-1][0] == reverse("accounts:login")
+    assert "Your password has been reset." in response.content.decode()
+    assert not response.wsgi_request.user.is_authenticated
+    verified.refresh_from_db()
+    assert verified.check_password(NEW_PASSWORD)
+
+
+def test_reset_sends_the_password_changed_notice(client, verified, mailoutbox):
+    request_reset(client, "old@example.com")
+
+    reset_password(client, mailoutbox[0])
+
+    assert len(mailoutbox) == 2
+    assert mailoutbox[1].to == ["old@example.com"]
+    assert mailoutbox[1].subject == "Your ThoughtTronix password was changed"
+
+
+def test_a_used_reset_link_no_longer_works(client, verified, mailoutbox):
+    request_reset(client, "old@example.com")
+    reset_password(client, mailoutbox[0])
+
+    response = open_reset_link(client, mailoutbox[0])
+
+    assert not response.context["validlink"]
+    assert "This reset link doesn't work" in response.content.decode()
+
+
+def test_an_expired_reset_link_no_longer_works(
+    client, verified, mailoutbox, monkeypatch
+):
+    request_reset(client, "old@example.com")
+    later = datetime.now() + timedelta(hours=1, minutes=1)
+    monkeypatch.setattr(default_token_generator, "_now", lambda: later)
+
+    response = open_reset_link(client, mailoutbox[0])
+
+    assert not response.context["validlink"]
+    verified.refresh_from_db()
+    assert verified.check_password("customer123")

@@ -28,6 +28,70 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-18 — Check Phase 4 and build Phase 5 of the account security center (forgotten password reset)
+
+### Prompts
+1. @prd/account-security-center.md @plans/account-security-center.md i want you to do phase five but before that can you tell me if all the acceptance criteria for phase 4 has been met?
+2. thank you cna you check off the acceptance criterea that we agreed on in both phase 4 and 5 in the plan?
+3. acceptance criterea for phase 4 and 5 hav not been checked off
+4. okay i have manually verified phase 5 can you update prompts.md
+
+### Summary
+- **Outcome:** First confirmed Phase 4: each of its five criteria is in
+  the code and tested, and the suite was green (355 passed) before any
+  Phase 5 work. Then built Phase 5 of `plans/account-security-center.md`:
+  - `PASSWORD_RESET_TIMEOUT = 60 * 60` (one hour) in `config/settings.py`.
+  - New `PasswordResetRequestForm` (Django's `PasswordResetForm`) in
+    `accounts/forms.py`. Its `get_users` keeps Django's rule (active, usable
+    password) and also drops users whose email isn't verified. Also new:
+    `ResetPasswordForm` (Django's `SetPasswordForm`). Both are styled with
+    DaisyUI's `input w-full`.
+  - Three thin views in `accounts/views.py`, built on Django's reset views:
+    `PasswordResetRequestView`, `PasswordResetSentView`, and
+    `PasswordResetSetView`. The last one sends the existing
+    `send_password_changed_notice()`, flashes a message, and redirects to
+    sign-in with no automatic sign-in. Routes under `/accounts/password/reset/`
+    are `accounts:password_reset`, `accounts:password_reset_done`, and
+    `accounts:password_reset_confirm`.
+  - New templates: `password_reset.html`, `password_reset_done.html` (the
+    same message for every email), and `password_reset_confirm.html` (new
+    password form, or a "this reset link doesn't work" page with a
+    "Send a new link" button). Also the plain-text
+    `emails/password_reset.txt` and `emails/password_reset_subject.txt`.
+    The sign-in page got a "Forgot password?" link.
+  - 11 new tests in `accounts/test_security.py`: the sign-in link, the
+    one-hour setting, mail for a verified email (mixed case too), no mail for
+    an unverified, unknown, or inactive one, an identical response for every
+    email, a reset that lands on sign-in without signing in, the notice
+    email, a reused link, and an expired link (the token generator's clock is
+    monkeypatched 61 minutes ahead). Phase 5's seven criteria are ticked off
+    in the plan.
+
+  Suite at 366 passed, and `ruff check` and `ruff format` are clean. The
+  user checked the reset flow by hand in the browser. Nothing committed.
+- **Deviations:** As in earlier phases, following the saved preference, I
+  explained each edit before making it and each went through the approval
+  prompt. "do phase five" was taken as the go-ahead for that mode. Two
+  departures from the PRD, both flagged to the user. First, the PRD lists
+  Django's four reset views, but the plan's criterion says a reset leads to
+  the sign-in page, so the confirm view redirects there with a flash message
+  and the "complete" view isn't used. Second, the reset email has a second
+  template for its subject line, because Django's reset view reads the
+  subject from a template. Follow-up question: the user asked me to check
+  off the Phase 4 and 5 criteria. They were already checked: Phase 4 in the
+  Phase 4 commit, Phase 5 at the end of this build.
+- **Sideways:** The user then reported that the boxes still looked
+  unchecked. I confirmed the file on disk was ticked (`sed` plus
+  `git status`), and suggested the editor tab was out of date (unsaved
+  buffer, reverted with **File: Revert File**, a different copy, or a stale
+  Markdown preview). The user also got `git diff` to check it. The user
+  didn't come back to it, so the cause wasn't confirmed. Pylance flagged
+  `import environs` as unresolved after the settings edit. That's the
+  editor pointing at a different virtual environment, not a code problem.
+  As before, `uv run` printed the harmless `VIRTUAL_ENV` mismatch warning.
+  The PRD's "a reset clears the sign-in lockout" isn't done yet. It
+  arrives with the attempt history and lockout in Phases 6–7.
+
 ## 2026-10-18 — Build Phase 4 of the account security center (change password)
 
 ### Prompts

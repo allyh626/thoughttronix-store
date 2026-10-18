@@ -165,15 +165,15 @@ notice.
 
 ### Acceptance criteria
 
-- [ ] The sign-in page links to the reset request page
-- [ ] The request page shows an identical response for known, unknown, and
+- [x] The sign-in page links to the reset request page
+- [x] The request page shows an identical response for known, unknown, and
       unverified emails
-- [ ] A customized reset form sends mail only to active users with a
+- [x] A customized reset form sends mail only to active users with a
       verified email
-- [ ] `PASSWORD_RESET_TIMEOUT` is one hour, and a used link no longer works
-- [ ] A completed reset leads to the sign-in page, with no automatic sign-in
-- [ ] The "password changed" notice is sent after a reset
-- [ ] Tests cover each recipient case, expiry, reuse, and the notice
+- [x] `PASSWORD_RESET_TIMEOUT` is one hour, and a used link no longer works
+- [x] A completed reset leads to the sign-in page, with no automatic sign-in
+- [x] The "password changed" notice is sent after a reset
+- [x] Tests cover each recipient case, expiry, reuse, and the notice
 
 ---
 

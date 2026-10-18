@@ -1,6 +1,13 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
+from django.contrib.auth.views import (
+    LoginView,
+    LogoutView,
+    PasswordChangeView,
+    PasswordResetConfirmView,
+    PasswordResetDoneView,
+    PasswordResetView,
+)
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core import signing
 from django.http import Http404
@@ -19,6 +26,8 @@ from .forms import (
     AddressForm,
     ChangeEmailForm,
     ChangePasswordForm,
+    PasswordResetRequestForm,
+    ResetPasswordForm,
     SignInForm,
     SignupForm,
 )
@@ -114,6 +123,45 @@ class ChangePasswordView(PasswordChangeView):
         messages.success(
             self.request,
             "Password changed. Every other device has been signed out.",
+        )
+        return response
+
+
+# --- Forgotten password -------------------------------------------------------
+#
+# Django's own reset views. No sign-in needed: the emailed link says who it
+# is for, lasts PASSWORD_RESET_TIMEOUT, and stops working once the password
+# changes.
+
+
+class PasswordResetRequestView(PasswordResetView):
+    """Ask for a reset link. Every email lands on the same "check your
+    email" page, so the page never reveals who has an account."""
+
+    form_class = PasswordResetRequestForm
+    template_name = "accounts/password_reset.html"
+    email_template_name = "accounts/emails/password_reset.txt"
+    subject_template_name = "accounts/emails/password_reset_subject.txt"
+    success_url = reverse_lazy("accounts:password_reset_done")
+
+
+class PasswordResetSentView(PasswordResetDoneView):
+    template_name = "accounts/password_reset_done.html"
+
+
+class PasswordResetSetView(PasswordResetConfirmView):
+    """Choose a new password from a reset link, then sign in with it —
+    there's no automatic sign-in."""
+
+    form_class = ResetPasswordForm
+    template_name = "accounts/password_reset_confirm.html"
+    success_url = reverse_lazy("accounts:login")
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        form.user.send_password_changed_notice()
+        messages.success(
+            self.request, "Your password has been reset. Sign in with the new one."
         )
         return response
 

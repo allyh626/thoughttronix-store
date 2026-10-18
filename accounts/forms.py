@@ -2,6 +2,8 @@ from django import forms
 from django.contrib.auth.forms import (
     AuthenticationForm,
     PasswordChangeForm,
+    PasswordResetForm,
+    SetPasswordForm,
     UserCreationForm,
 )
 
@@ -77,6 +79,31 @@ class ChangeEmailForm(forms.Form):
 class ChangePasswordForm(PasswordChangeForm):
     """The stock password change form — current password, then the new one
     twice, checked against ``AUTH_PASSWORD_VALIDATORS`` — in DaisyUI."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs["class"] = "input w-full"
+
+
+class PasswordResetRequestForm(PasswordResetForm):
+    """The stock "email me a reset link" form, in DaisyUI.
+
+    Mail goes only to active users with a usable password (Django's own
+    rule) and a verified email (ours). The page looks the same either way.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs["class"] = "input w-full"
+
+    def get_users(self, email):
+        return (user for user in super().get_users(email) if user.email_verified)
+
+
+class ResetPasswordForm(SetPasswordForm):
+    """The stock "choose a new password" form from a reset link, in DaisyUI."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

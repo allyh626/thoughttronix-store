@@ -180,3 +180,6 @@ DEFAULT_FROM_EMAIL = env.str(
 
 # How long an email verification link stays valid, in seconds (3 days).
 EMAIL_VERIFICATION_TIMEOUT = 60 * 60 * 24 * 3
+
+# How long a password reset link stays valid, in seconds (1 hour).
+PASSWORD_RESET_TIMEOUT = 60 * 60
