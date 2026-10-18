@@ -95,6 +95,18 @@ class User(AbstractUser):
         )
         send_mail("Your ThoughtTronix email was changed", message, None, [old_email])
 
+    def send_password_changed_notice(self) -> None:
+        """Tell the verified email that the password changed. Sends nothing
+        when the email is missing or unverified."""
+        if not (self.email and self.email_verified):
+            return
+        message = render_to_string(
+            "accounts/emails/password_changed.txt", {"user": self}
+        )
+        send_mail(
+            "Your ThoughtTronix password was changed", message, None, [self.email]
+        )
+
     @classmethod
     def verify_email_token(cls, token: str) -> "User":
         """Confirm the address named in ``token`` and return its user.

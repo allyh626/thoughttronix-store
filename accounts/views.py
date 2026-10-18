@@ -1,6 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.views import LoginView, LogoutView
+from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core import signing
 from django.http import Http404
@@ -15,7 +15,13 @@ from django.views.generic import (
     UpdateView,
 )
 
-from .forms import AddressForm, ChangeEmailForm, SignInForm, SignupForm
+from .forms import (
+    AddressForm,
+    ChangeEmailForm,
+    ChangePasswordForm,
+    SignInForm,
+    SignupForm,
+)
 from .models import Address, User
 
 
@@ -91,6 +97,25 @@ class ChangeEmailView(LoginRequiredMixin, FormView):
             "The change takes effect once you open it.",
         )
         return super().form_valid(form)
+
+
+class ChangePasswordView(PasswordChangeView):
+    """Django's own password change. It keeps this session signed in;
+    every other session ends because its fingerprint was the old password.
+    """
+
+    form_class = ChangePasswordForm
+    template_name = "accounts/change_password.html"
+    success_url = reverse_lazy("accounts:account")
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        form.user.send_password_changed_notice()
+        messages.success(
+            self.request,
+            "Password changed. Every other device has been signed out.",
+        )
+        return response
 
 
 class SignInView(LoginView):

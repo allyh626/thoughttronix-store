@@ -21,6 +21,11 @@ urlpatterns = [
         name="verify_email",
     ),
     path("email/change/", views.ChangeEmailView.as_view(), name="change_email"),
+    path(
+        "password/change/",
+        views.ChangePasswordView.as_view(),
+        name="change_password",
+    ),
     path("addresses/new/", views.AddressCreateView.as_view(), name="address_create"),
     path(
         "addresses/<int:pk>/edit/",

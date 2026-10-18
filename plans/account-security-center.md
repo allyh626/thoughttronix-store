@@ -139,14 +139,14 @@ and a "password changed" notice goes to the verified email.
 
 ### Acceptance criteria
 
-- [ ] The form takes the current password and the new one twice, checked
+- [x] The form takes the current password and the new one twice, checked
       against `AUTH_PASSWORD_VALIDATORS`
-- [ ] The current session stays signed in, and another session is signed
+- [x] The current session stays signed in, and another session is signed
       out
-- [ ] A plain-text "password changed" email is sent to a verified email (and
+- [x] A plain-text "password changed" email is sent to a verified email (and
       not when the email is unverified or missing)
-- [ ] It returns to My account with a flash message
-- [ ] Tests cover the wrong current password, a weak password, session
+- [x] It returns to My account with a flash message
+- [x] Tests cover the wrong current password, a weak password, session
       behavior, and the email
 
 ---

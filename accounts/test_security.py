@@ -7,6 +7,7 @@ from http import HTTPStatus
 import pytest
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
+from django.test import Client
 from django.urls import reverse
 
 SIGNUP_DATA = {
@@ -474,3 +475,128 @@ def test_accounts_with_no_email_see_the_add_email_reminder(client, customer):
     assert "add an email to make it recoverable" in page
     assert reverse("accounts:change_email") in page
     assert "Add email" in page
+
+
+# --- Changing password --------------------------------------------------------
+
+NEW_PASSWORD = "quantum-thought-4242"
+
+
+def change_password(client, old="customer123", new=NEW_PASSWORD, again=None):
+    return client.post(
+        reverse("accounts:change_password"),
+        {
+            "old_password": old,
+            "new_password1": new,
+            "new_password2": new if again is None else again,
+        },
+    )
+
+
+def test_change_password_requires_sign_in(client, db):
+    response = client.get(reverse("accounts:change_password"))
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert reverse("accounts:login") in response.url
+
+
+def test_my_account_links_to_change_password(client, customer):
+    client.force_login(customer)
+
+    page = client.get(reverse("accounts:account")).content.decode()
+
+    assert reverse("accounts:change_password") in page
+
+
+def test_change_password_rejects_a_wrong_current_password(client, verified, mailoutbox):
+    client.force_login(verified)
+
+    response = change_password(client, old="wrong")
+
+    assert response.context["form"].errors["old_password"]
+    verified.refresh_from_db()
+    assert verified.check_password("customer123")
+    assert mailoutbox == []
+
+
+def test_change_password_rejects_a_weak_password(client, verified):
+    client.force_login(verified)
+
+    response = change_password(client, new="password")
+
+    assert response.context["form"].errors["new_password2"]
+    verified.refresh_from_db()
+    assert verified.check_password("customer123")
+
+
+def test_change_password_rejects_mismatched_new_passwords(client, verified):
+    client.force_login(verified)
+
+    response = change_password(client, again="something-else-entirely")
+
+    assert response.context["form"].errors["new_password2"]
+    verified.refresh_from_db()
+    assert verified.check_password("customer123")
+
+
+def test_change_password_returns_to_my_account_with_a_message(client, verified):
+    client.force_login(verified)
+
+    response = client.post(
+        reverse("accounts:change_password"),
+        {
+            "old_password": "customer123",
+            "new_password1": NEW_PASSWORD,
+            "new_password2": NEW_PASSWORD,
+        },
+        follow=True,
+    )
+
+    assert response.redirect_chain[-1][0] == reverse("accounts:account")
+    assert "Password changed." in response.content.decode()
+    verified.refresh_from_db()
+    assert verified.check_password(NEW_PASSWORD)
+
+
+def test_change_password_keeps_this_device_and_signs_out_others(verified):
+    this_device, other_device = Client(), Client()
+    assert this_device.login(username="customer", password="customer123")
+    assert other_device.login(username="customer", password="customer123")
+
+    change_password(this_device)
+
+    assert this_device.get(reverse("accounts:account")).status_code == HTTPStatus.OK
+    response = other_device.get(reverse("accounts:account"))
+    assert response.status_code == HTTPStatus.FOUND
+    assert reverse("accounts:login") in response.url
+
+
+def test_change_password_mails_a_verified_email(client, verified, mailoutbox):
+    client.force_login(verified)
+
+    change_password(client)
+
+    assert len(mailoutbox) == 1
+    assert mailoutbox[0].to == ["old@example.com"]
+    assert mailoutbox[0].subject == "Your ThoughtTronix password was changed"
+    assert "password on your ThoughtTronix account was just changed" in (
+        " ".join(mailoutbox[0].body.split())
+    )
+
+
+def test_change_password_mails_nothing_to_an_unverified_email(
+    client, unverified, mailoutbox
+):
+    client.force_login(unverified)
+
+    change_password(client)
+
+    assert mailoutbox == []
+
+
+def test_change_password_mails_nothing_without_an_email(client, customer, mailoutbox):
+    client.force_login(customer)
+
+    change_password(client)
+
+    assert mailoutbox == []

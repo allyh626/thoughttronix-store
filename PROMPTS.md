@@ -28,6 +28,66 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-18 — Build Phase 4 of the account security center (change password)
+
+### Prompts
+1. @prd/account-security-center.md @plans/account-security-center.md Do Phase 4.
+2. okay but i dont need that link to perform the behavior that was implemented in this session? i can just run the server and manually test it in the browser?
+3. okay how would i open an ingocnito browser
+4. okay i manualy verified the behavior in the browser,do i run  git restore db.sqlite3 after stopping the development server and then my changes are ready for commit?
+5. okay perfect yet can you update the prompts.md file with the decisions made in this session
+
+### Summary
+- **Outcome:** Built Phase 4 of `plans/account-security-center.md`:
+  - New `User.send_password_changed_notice()` in `accounts/models.py`. It
+    mails `templates/accounts/emails/password_changed.txt` only when the
+    email exists and is verified. It is a model method so Phase 5's
+    password reset can reuse it.
+  - New `ChangePasswordForm`: Django's `PasswordChangeForm` (current
+    password, new password twice, `AUTH_PASSWORD_VALIDATORS`) with the
+    DaisyUI `input w-full` class, the same way `SignInForm` is styled.
+  - New `ChangePasswordView`, built on Django's `PasswordChangeView`, at
+    `/accounts/password/change/` (`accounts:change_password`). The
+    built-in view already requires sign-in and calls
+    `update_session_auth_hash`, so this device stays signed in. Other
+    sessions end because Django's session fingerprint comes from the
+    password hash. No `session_salt` was needed (that's Phase 8). The
+    override only adds the notice and the flash message, then returns to
+    My account.
+  - New `templates/accounts/change_password.html`, and a "Password" card
+    with a Change password link in My account's Sign-in & security
+    section.
+  - 10 new tests in `accounts/test_security.py`: sign-in required, the
+    My account link, a wrong current password, a weak password,
+    mismatched new passwords, the redirect and message, two `Client`s
+    showing one device stays and the other is signed out, and the email
+    for verified, unverified, and missing addresses. Phase 4's five
+    criteria are ticked off in the plan.
+
+  Suite at 355 passed, and `ruff check` and `ruff format` are clean. The
+  user checked the behavior by hand in the browser (a normal window plus
+  a private window as the second device). Nothing committed.
+- **Deviations:** As in Phase 3, following the saved preference, I
+  explained each edit before making it and each went through the approval
+  prompt. "Do Phase 4" was taken as the go-ahead for that mode. Follow-up
+  questions: whether the reset link mentioned in the notice email is
+  needed to test this phase (answered: no, it's only text in the email;
+  the link arrives in Phase 5), with step-by-step browser testing using
+  the seeded `customer` account and a private window as the "other
+  device"; how to open a private window (answered: `Ctrl + Shift + N` in
+  Chrome/Edge, `Ctrl + Shift + P` in Firefox); and whether to stop the
+  server, run `git restore db.sqlite3`, then commit (answered: yes, check
+  `git status` first). The offer to write this log was taken.
+- **Sideways:** `ruff format` rejoined two new test signatures onto one
+  line each. It was applied after the suite had passed, with no change in
+  behavior. My end-of-build summary said 11 new tests; there are 10, and
+  this entry corrects it. Browser testing changes the tracked
+  `db.sqlite3` (the customer's password), so the user was told to restore
+  it before committing. The notice email tells customers to reset from
+  the sign-in page, but the "Forgot password?" link isn't built until
+  Phase 5. As before, `uv run` printed the harmless `VIRTUAL_ENV`
+  mismatch warning.
+
 ## 2026-10-18 — Build Phase 3 of the account security center (add or change email)
 
 ### Prompts
