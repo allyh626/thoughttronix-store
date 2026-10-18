@@ -7,9 +7,15 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.views import View
-from django.views.generic import CreateView, DeleteView, TemplateView, UpdateView
+from django.views.generic import (
+    CreateView,
+    DeleteView,
+    FormView,
+    TemplateView,
+    UpdateView,
+)
 
-from .forms import AddressForm, SignInForm, SignupForm
+from .forms import AddressForm, ChangeEmailForm, SignInForm, SignupForm
 from .models import Address, User
 
 
@@ -50,16 +56,41 @@ class VerifyEmailView(View):
 
 
 class ResendVerificationView(LoginRequiredMixin, View):
-    """POST-only: mail a fresh verification link for an unverified email."""
+    """POST-only: mail a fresh verification link for an unverified or
+    pending email."""
 
     def post(self, request):
         user = request.user
-        if user.email and not user.email_verified:
+        if user.email_to_confirm:
             user.send_verification_email(request)
-            messages.success(request, f"Verification email sent to {user.email}.")
+            messages.success(
+                request, f"Verification email sent to {user.email_to_confirm}."
+            )
         else:
             messages.info(request, "There's no unverified email to confirm.")
         return redirect("accounts:account")
+
+
+class ChangeEmailView(LoginRequiredMixin, FormView):
+    """Add or change the email. The new address waits as ``pending_email``
+    until its link is opened, so a typo can't lock the customer out."""
+
+    form_class = ChangeEmailForm
+    template_name = "accounts/change_email.html"
+    success_url = reverse_lazy("accounts:account")
+
+    def get_form_kwargs(self):
+        return {**super().get_form_kwargs(), "user": self.request.user}
+
+    def form_valid(self, form):
+        user = form.save()
+        user.send_verification_email(self.request)
+        messages.success(
+            self.request,
+            f"Check {user.pending_email} for a confirmation link. "
+            "The change takes effect once you open it.",
+        )
+        return super().form_valid(form)
 
 
 class SignInView(LoginView):

@@ -112,17 +112,17 @@ one.
 
 ### Acceptance criteria
 
-- [ ] `pending_email` field exists
-- [ ] The change-email form requires the current password, and rejects
+- [x] `pending_email` field exists
+- [x] The change-email form requires the current password, and rejects
       emails used by another account or matching the current one
-- [ ] Submitting saves `pending_email` and sends the link to the new address
-- [ ] Status shows "pending change to …" and Resend also works for pending
+- [x] Submitting saves `pending_email` and sends the link to the new address
+- [x] Status shows "pending change to …" and Resend also works for pending
       emails
-- [ ] Confirming moves `pending_email` into `email`, marks it verified, and
+- [x] Confirming moves `pending_email` into `email`, marks it verified, and
       sends the notice to the old address (if there was one)
-- [ ] The old link stops working once its address is confirmed or replaced
-- [ ] Accounts with no email see the add-email reminder
-- [ ] Tests cover the wrong password, duplicates, the confirm swap, and the
+- [x] The old link stops working once its address is confirmed or replaced
+- [x] Accounts with no email see the add-email reminder
+- [x] Tests cover the wrong password, duplicates, the confirm swap, and the
       notice
 
 ---

@@ -1,0 +1,13 @@
+{% autoescape off %}Hi {{ user.username }},
+
+The email address on your ThoughtTronix account was changed from
+{{ old_email }} to {{ new_email }}.
+
+If you made this change, there's nothing else to do.
+
+If you didn't, someone may have access to your account. Sign in, change
+your password, and change your email back on My account.
+
+— The ThoughtTronix Store
+Your Thoughts, Our Business.
+{% endautoescape %}

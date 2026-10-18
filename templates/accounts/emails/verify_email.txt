@@ -1,6 +1,6 @@
 {% autoescape off %}Hi {{ user.username }},
 
-Please confirm that {{ user.email }} is your email address by opening this link:
+Please confirm that {{ email }} is your email address by opening this link:
 
 {{ verify_url }}
 

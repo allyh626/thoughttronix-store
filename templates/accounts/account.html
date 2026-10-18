@@ -21,15 +21,31 @@
               <span class="badge badge-warning badge-sm">Unverified</span>
             {% endif %}
           </div>
-          {% if not user.email_verified %}
-            <form method="post" action="{% url 'accounts:resend_verification' %}" class="card-actions mt-2">
+        {% else %}
+          <div role="alert" class="alert alert-warning">
+            <span>
+              No email on file. Without one, you can't recover your account if
+              you forget your password — add an email to make it recoverable.
+            </span>
+          </div>
+        {% endif %}
+        {% if user.pending_email %}
+          <div class="flex flex-wrap items-center gap-2 text-sm">
+            <span class="badge badge-info badge-sm">Pending</span>
+            <span>Pending change to {{ user.pending_email }} — open the link we sent there to confirm it.</span>
+          </div>
+        {% endif %}
+        <div class="card-actions mt-2 flex-wrap items-center">
+          <a href="{% url 'accounts:change_email' %}" class="btn btn-ghost btn-xs">
+            {% if user.email %}Change email{% else %}Add email{% endif %}
+          </a>
+          {% if user.email_to_confirm %}
+            <form method="post" action="{% url 'accounts:resend_verification' %}">
               {% csrf_token %}
               <button type="submit" class="btn btn-outline btn-xs">Resend verification email</button>
             </form>
           {% endif %}
-        {% else %}
-          <p class="text-sm opacity-70">No email on file.</p>
-        {% endif %}
+        </div>
       </div>
     </div>
   </section>

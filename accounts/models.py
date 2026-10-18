@@ -4,6 +4,7 @@ from typing import Any
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.core import signing
+from django.core.mail import send_mail
 from django.db import models, transaction
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -34,51 +35,96 @@ class User(AbstractUser):
         "email address", unique=True, null=True, blank=True
     )
     email_verified = models.BooleanField(default=False)
+    # A new address waiting for its link to be clicked. Until then the
+    # current email stays in effect. Not unique: two accounts may both
+    # claim an address, and only the first to confirm gets it.
+    pending_email = models.EmailField(null=True, blank=True)  # noqa: DJ001
 
     def save(self, *args, **kwargs):
         # Django's user manager turns a missing email into "", which would
         # collide under the unique rule — store it as NULL instead.
         self.email = self.email.strip().lower() if self.email else None
+        self.pending_email = (
+            self.pending_email.strip().lower() if self.pending_email else None
+        )
         super().save(*args, **kwargs)
 
+    @property
+    def email_to_confirm(self) -> str | None:
+        """The address a verification link confirms: a pending change if
+        there is one, else an unverified current email, else None."""
+        if self.pending_email:
+            return self.pending_email
+        if self.email and not self.email_verified:
+            return self.email
+        return None
+
     def email_verification_token(self) -> str:
-        """A signed, timestamped token that confirms the current email.
+        """A signed, timestamped token that confirms ``email_to_confirm``.
 
         It names the address itself, so it stops working once that
         address is verified or replaced.
         """
         return signing.dumps(
-            {"user": self.pk, "email": self.email}, salt=VERIFY_EMAIL_SALT
+            {"user": self.pk, "email": self.email_to_confirm}, salt=VERIFY_EMAIL_SALT
         )
 
     def send_verification_email(self, request) -> None:
-        """Mail a verification link for the current email to that address."""
+        """Mail a verification link for ``email_to_confirm`` to that address."""
         path = reverse("accounts:verify_email", args=[self.email_verification_token()])
         message = render_to_string(
             "accounts/emails/verify_email.txt",
-            {"user": self, "verify_url": request.build_absolute_uri(path)},
+            {
+                "user": self,
+                "email": self.email_to_confirm,
+                "verify_url": request.build_absolute_uri(path),
+            },
         )
-        self.email_user("Confirm your ThoughtTronix email", message)
+        send_mail(
+            "Confirm your ThoughtTronix email",
+            message,
+            None,
+            [self.email_to_confirm],
+        )
+
+    def send_email_changed_notice(self, old_email: str) -> None:
+        """Tell the old address that the account's email has changed."""
+        message = render_to_string(
+            "accounts/emails/email_changed.txt",
+            {"user": self, "old_email": old_email, "new_email": self.email},
+        )
+        send_mail("Your ThoughtTronix email was changed", message, None, [old_email])
 
     @classmethod
     def verify_email_token(cls, token: str) -> "User":
-        """Mark the address named in ``token`` verified and return its user.
+        """Confirm the address named in ``token`` and return its user.
 
-        Raises ``signing.BadSignature`` when the token is tampered with or
-        already used (its address is no longer this account's unverified
-        email), and its subclass ``signing.SignatureExpired`` when it is
+        A pending address moves into ``email``, and the old address (if
+        any) is told. Raises ``signing.BadSignature`` when the token is
+        tampered with or already used (its address is no longer the one
+        waiting for confirmation) or its address now belongs to another
+        account, and its subclass ``signing.SignatureExpired`` when it is
         older than ``EMAIL_VERIFICATION_TIMEOUT``.
         """
         data = signing.loads(
             token, salt=VERIFY_EMAIL_SALT, max_age=settings.EMAIL_VERIFICATION_TIMEOUT
         )
-        user = cls.objects.filter(
-            pk=data["user"], email=data["email"], email_verified=False
-        ).first()
-        if user is None:
+        user = cls.objects.filter(pk=data["user"]).first()
+        if user is None or data["email"] != user.email_to_confirm:
             raise signing.BadSignature("This link has already been used.")
+        old_email = None
+        if user.pending_email:
+            if cls.objects.filter(email=user.pending_email).exists():
+                raise signing.BadSignature("This address belongs to another account.")
+            old_email, user.email, user.pending_email = (
+                user.email,
+                user.pending_email,
+                None,
+            )
         user.email_verified = True
-        user.save(update_fields=["email_verified"])
+        user.save(update_fields=["email", "pending_email", "email_verified"])
+        if old_email:
+            user.send_email_changed_notice(old_email)
         return user
 
 

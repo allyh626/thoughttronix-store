@@ -28,6 +28,71 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-18 — Build Phase 3 of the account security center (add or change email)
+
+### Prompts
+1. @prd/account-security-center.md @plans/account-security-center.md Do Phase 3.
+2. can you give me a step by step of how to verify this in the browser after runninh the migrate command
+3. okay if i run the seed command it wont change any committed changes to my database right?
+4. if i manually changed the email back would i be able to commit my changes from there?
+5. can you add the prompts.md entry for this phase we just implemented
+
+### Summary
+- **Outcome:** Built Phase 3 of `plans/account-security-center.md`:
+  - `accounts.User` gained `pending_email` (nullable, not unique, saved
+    lowercase; migration `accounts/migrations/0004_user_pending_email.py`)
+    and an `email_to_confirm` property: the pending address if there is
+    one, else an unverified current email. Tokens, the verification email,
+    and Resend all use it, so a link stops working once its address is
+    confirmed or replaced.
+  - `verify_email_token` now moves a pending address into `email`, marks
+    it verified, and calls the new `send_email_changed_notice(old_email)`
+    when there was an old address. It refuses a pending address that
+    another account took in the meantime.
+  - New `ChangeEmailForm` (new email plus current password; rejects a
+    wrong password, the current email, and emails used by another account,
+    ignoring capitalization). Its `save()` only sets `pending_email`.
+  - New `ChangeEmailView` (`FormView`, sign-in required) at
+    `/accounts/email/change/` (`accounts:change_email`), and
+    `ResendVerificationView` now also resends for pending emails.
+  - New templates: `templates/accounts/change_email.html` (titled "Add
+    email" when there's none) and `templates/accounts/emails/email_changed.txt`.
+    `verify_email.txt` names the address being confirmed. My account shows
+    "Pending change to …", the add-email reminder for accounts with no
+    email, and a Change/Add email link.
+  - 14 new tests in `accounts/test_security.py`. Phase 3's eight criteria
+    are ticked off in the plan.
+
+  Suite at 345 passed, and `ruff check` and `ruff format` are clean.
+  `migrate` was left for the user to run. Nothing committed.
+- **Deviations:** Following the saved preference, I explained each edit
+  before making it, and each went through the approval prompt. I didn't
+  ask at the start which mode to use, as the memory note suggests; "Do
+  Phase 3" was taken as the go-ahead for that mode. Three choices the plan
+  left open were reported, and the user hasn't answered them yet: two
+  accounts may hold the same pending address (first to confirm wins); a
+  pending change replaces an unverified email's link; and the notice goes
+  to the old address even if it was never verified. Follow-up questions:
+  how to test in the browser (answered with a 10-step walkthrough using
+  the seeded `customer` account and links copied from the terminal);
+  whether `seed` changes committed files (answered: no, only the local
+  `db.sqlite3` and `media/products/`, recoverable with
+  `git restore db.sqlite3 media/` and a fresh `migrate`); and whether
+  changing the email back by hand is enough to commit (answered: yes, but
+  admin can't reset the verified or pending fields and testing leaves
+  other traces, so `git restore db.sqlite3` plus `migrate` was
+  recommended).
+- **Sideways:**
+  - Pylance flagged `FormView` and `ChangeEmailForm` as undefined after
+    the first `views.py` edit; the imports arrived in the very next edit.
+  - `ruff format` wanted one long line in `accounts/forms.py` wrapped. It
+    was fixed after the test run, and the suite wasn't run again because
+    the change was formatting only.
+  - My end-of-build summary named the notice template
+    `emails/change_email.txt`; the real file is `emails/email_changed.txt`.
+  - The browser walkthrough hasn't been confirmed by the user yet. As
+    before, `uv run` printed the harmless `VIRTUAL_ENV` mismatch warning.
+
 ## 2026-10-17 — Build Phase 2 of the account security center (email delivery and the verification link)
 
 ### Prompts

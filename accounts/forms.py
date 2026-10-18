@@ -30,6 +30,46 @@ class SignupForm(UserCreationForm):
         return email
 
 
+class ChangeEmailForm(forms.Form):
+    """Add or change the account's email, confirmed with the current password.
+
+    The new address is only saved as ``pending_email``; it takes over once
+    the link sent to it is opened.
+    """
+
+    email = forms.EmailField(label="New email")
+    password = forms.CharField(
+        label="Current password", strip=False, widget=forms.PasswordInput
+    )
+
+    def __init__(self, user, *args, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs["class"] = "input w-full"
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].strip().lower()
+        if email == self.user.email:
+            raise forms.ValidationError("That's already your email.")
+        if User.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError("An account with this email already exists.")
+        return email
+
+    def clean_password(self):
+        password = self.cleaned_data["password"]
+        if not self.user.check_password(password):
+            raise forms.ValidationError(
+                "Your current password was entered incorrectly."
+            )
+        return password
+
+    def save(self):
+        self.user.pending_email = self.cleaned_data["email"]
+        self.user.save(update_fields=["pending_email"])
+        return self.user
+
+
 class SignInForm(AuthenticationForm):
     """The stock authentication form, dressed in DaisyUI."""
 

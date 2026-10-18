@@ -282,3 +282,195 @@ def test_resend_requires_sign_in(client, db, mailoutbox):
     assert response.status_code == HTTPStatus.FOUND
     assert reverse("accounts:login") in response.url
     assert mailoutbox == []
+
+
+# --- Changing email -----------------------------------------------------------
+#
+# The ``customer`` fixture's password is "customer123".
+
+
+@pytest.fixture
+def verified(customer):
+    customer.email = "old@example.com"
+    customer.email_verified = True
+    customer.save()
+    return customer
+
+
+def change_email(client, email, password="customer123"):
+    return client.post(
+        reverse("accounts:change_email"), {"email": email, "password": password}
+    )
+
+
+def test_change_email_requires_sign_in(client, db):
+    response = client.get(reverse("accounts:change_email"))
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert reverse("accounts:login") in response.url
+
+
+def test_change_email_rejects_a_wrong_password(client, verified, mailoutbox):
+    client.force_login(verified)
+
+    response = change_email(client, "new@example.com", password="wrong")
+
+    assert response.context["form"].errors["password"] == [
+        "Your current password was entered incorrectly."
+    ]
+    verified.refresh_from_db()
+    assert verified.pending_email is None
+    assert mailoutbox == []
+
+
+def test_change_email_rejects_an_email_in_use_ignoring_capitalization(
+    client, verified, other_customer
+):
+    other_customer.email = "taken@example.com"
+    other_customer.save()
+    client.force_login(verified)
+
+    response = change_email(client, "Taken@Example.com")
+
+    assert response.context["form"].errors["email"] == [
+        "An account with this email already exists."
+    ]
+
+
+def test_change_email_rejects_the_current_email(client, verified):
+    client.force_login(verified)
+
+    response = change_email(client, "OLD@example.com")
+
+    assert response.context["form"].errors["email"] == ["That's already your email."]
+
+
+def test_change_email_saves_it_as_pending_and_mails_the_new_address(
+    client, verified, mailoutbox
+):
+    client.force_login(verified)
+
+    response = change_email(client, "New@Example.com")
+
+    assert response.url == reverse("accounts:account")
+    verified.refresh_from_db()
+    assert verified.pending_email == "new@example.com"
+    assert verified.email == "old@example.com"
+    assert verified.email_verified
+    assert mailoutbox[0].to == ["new@example.com"]
+    assert "new@example.com" in mailoutbox[0].body
+
+
+def test_my_account_shows_the_pending_change_and_resend(client, verified):
+    verified.pending_email = "new@example.com"
+    verified.save()
+    client.force_login(verified)
+
+    page = client.get(reverse("accounts:account")).content.decode()
+
+    assert "Pending change to new@example.com" in page
+    assert "Resend verification email" in page
+
+
+def test_resend_sends_the_link_to_the_pending_email(client, verified, mailoutbox):
+    verified.pending_email = "new@example.com"
+    verified.save()
+    client.force_login(verified)
+
+    client.post(reverse("accounts:resend_verification"))
+
+    assert mailoutbox[0].to == ["new@example.com"]
+
+
+def test_confirming_swaps_in_the_new_email_and_notifies_the_old(
+    client, verified, mailoutbox
+):
+    client.force_login(verified)
+    change_email(client, "new@example.com")
+
+    response = client.get(link_in(mailoutbox[0]), follow=True)
+
+    verified.refresh_from_db()
+    assert verified.email == "new@example.com"
+    assert verified.pending_email is None
+    assert verified.email_verified
+    assert "new@example.com is verified" in response.content.decode()
+    notice = mailoutbox[1]
+    assert notice.to == ["old@example.com"]
+    assert "old@example.com to new@example.com" in " ".join(notice.body.split())
+
+
+def test_adding_a_first_email_sends_no_notice(client, customer, mailoutbox):
+    client.force_login(customer)
+    change_email(client, "first@example.com")
+
+    client.get(link_in(mailoutbox[0]))
+
+    customer.refresh_from_db()
+    assert customer.email == "first@example.com"
+    assert customer.email_verified
+    assert len(mailoutbox) == 1
+
+
+def test_a_confirmed_change_link_stops_working(client, verified, mailoutbox):
+    client.force_login(verified)
+    change_email(client, "new@example.com")
+    link = link_in(mailoutbox[0])
+    client.get(link)
+
+    response = client.get(link)
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_a_link_for_a_replaced_pending_email_stops_working(
+    client, verified, mailoutbox
+):
+    client.force_login(verified)
+    change_email(client, "first-try@example.com")
+    change_email(client, "second-try@example.com")
+
+    response = client.get(link_in(mailoutbox[0]))
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    verified.refresh_from_db()
+    assert verified.email == "old@example.com"
+
+
+def test_a_pending_change_replaces_an_unverified_emails_link(
+    client, unverified, mailoutbox
+):
+    unverified.send_verification_email(client.get("/").wsgi_request)
+    client.force_login(unverified)
+    change_email(client, "new@example.com")
+
+    response = client.get(link_in(mailoutbox[0]))
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    unverified.refresh_from_db()
+    assert not unverified.email_verified
+
+
+def test_confirming_fails_if_another_account_took_the_address(
+    client, verified, other_customer, mailoutbox
+):
+    client.force_login(verified)
+    change_email(client, "new@example.com")
+    other_customer.email = "new@example.com"
+    other_customer.save()
+
+    response = client.get(link_in(mailoutbox[0]))
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    verified.refresh_from_db()
+    assert verified.email == "old@example.com"
+
+
+def test_accounts_with_no_email_see_the_add_email_reminder(client, customer):
+    client.force_login(customer)
+
+    page = client.get(reverse("accounts:account")).content.decode()
+
+    assert "add an email to make it recoverable" in page
+    assert reverse("accounts:change_email") in page
+    assert "Add email" in page
