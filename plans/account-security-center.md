@@ -191,16 +191,16 @@ older than 90 days.
 
 ### Acceptance criteria
 
-- [ ] `SignInAttempt` model and migration exist (username lowercase,
+- [x] `SignInAttempt` model and migration exist (username lowercase,
       timestamp, succeeded, kind)
-- [ ] Successful and failed sign-ins are both recorded, including for
+- [x] Successful and failed sign-ins are both recorded, including for
       nonexistent usernames
-- [ ] A completed reset records a "password reset" attempt
-- [ ] My account shows the 5 most recent attempts for the signed-in user,
+- [x] A completed reset records a "password reset" attempt
+- [x] My account shows the 5 most recent attempts for the signed-in user,
       newest first
-- [ ] `prune_signin_attempts` deletes attempts older than 90 days and keeps
+- [x] `prune_signin_attempts` deletes attempts older than 90 days and keeps
       newer ones
-- [ ] Tests cover recording, the activity list, and the prune command
+- [x] Tests cover recording, the activity list, and the prune command
 
 ---
 

@@ -7,7 +7,7 @@ from django.contrib.auth.forms import (
     UserCreationForm,
 )
 
-from .models import Address, User
+from .models import Address, SignInAttempt, User
 
 
 class SignupForm(UserCreationForm):
@@ -112,12 +112,29 @@ class ResetPasswordForm(SetPasswordForm):
 
 
 class SignInForm(AuthenticationForm):
-    """The stock authentication form, dressed in DaisyUI."""
+    """The stock authentication form, dressed in DaisyUI.
+
+    Every real attempt — a username and password both given — is recorded
+    as a ``SignInAttempt``, succeeded or failed, whether or not the
+    username exists.
+    """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs["class"] = "input w-full"
+
+    def clean(self):
+        username = self.cleaned_data.get("username")
+        if not (username and self.cleaned_data.get("password")):
+            return super().clean()
+        try:
+            cleaned_data = super().clean()
+        except forms.ValidationError:
+            SignInAttempt.objects.record(username, succeeded=False)
+            raise
+        SignInAttempt.objects.record(username, succeeded=True)
+        return cleaned_data
 
 
 class AddressForm(forms.ModelForm):

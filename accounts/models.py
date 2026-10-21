@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from datetime import timedelta
 from typing import Any
 
 from django.conf import settings
@@ -8,6 +9,7 @@ from django.core.mail import send_mail
 from django.db import models, transaction
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils import timezone
 
 from .validators import US_STATES, zip_validator
 
@@ -138,6 +140,61 @@ class User(AbstractUser):
         if old_email:
             user.send_email_changed_notice(old_email)
         return user
+
+
+class SignInAttemptQuerySet(models.QuerySet):
+    def record(
+        self, username: str, *, succeeded: bool, kind: str = "sign_in"
+    ) -> "SignInAttempt":
+        """Save one attempt for ``username`` as typed (lowercased on save)."""
+        return self.create(username=username, succeeded=succeeded, kind=kind)
+
+    def for_user(self, user: Any) -> "SignInAttemptQuerySet":
+        """``user``'s attempts, newest first."""
+        return self.filter(username=user.username.lower())
+
+    def stale(self) -> "SignInAttemptQuerySet":
+        """Attempts older than ``SignInAttempt.RETENTION`` — ready to prune."""
+        return self.filter(created_at__lt=timezone.now() - SignInAttempt.RETENTION)
+
+
+class SignInAttempt(models.Model):
+    """One sign-in attempt, or one completed password reset.
+
+    Keyed by the username as typed rather than a foreign key, so attempts
+    on usernames that don't exist are recorded too. No IP address is kept.
+    """
+
+    class Kind(models.TextChoices):
+        SIGN_IN = "sign_in", "Sign-in"
+        PASSWORD_RESET = "password_reset", "Password reset"
+
+    # How long attempts are kept; ``prune_signin_attempts`` deletes older ones.
+    RETENTION = timedelta(days=90)
+
+    username = models.CharField(max_length=150, db_index=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    succeeded = models.BooleanField()
+    kind = models.CharField(max_length=20, choices=Kind, default=Kind.SIGN_IN)
+
+    objects = SignInAttemptQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+
+    def __str__(self):
+        return f"{self.username} — {self.description} at {self.created_at}"
+
+    def save(self, *args, **kwargs):
+        self.username = self.username.lower()
+        super().save(*args, **kwargs)
+
+    @property
+    def description(self) -> str:
+        """How recent activity labels this attempt."""
+        if self.kind == self.Kind.PASSWORD_RESET:
+            return "Password reset"
+        return "Signed in" if self.succeeded else "Failed sign-in"
 
 
 class AddressQuerySet(models.QuerySet):

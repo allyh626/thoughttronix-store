@@ -1,6 +1,7 @@
 """The Account Security Center: emails on the user, signup's email rules,
 verification links, and the Sign-in & security section of My account."""
 
+import io
 import re
 from datetime import datetime, timedelta
 from http import HTTPStatus
@@ -8,9 +9,13 @@ from http import HTTPStatus
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
+from django.core.management import call_command
 from django.db import IntegrityError, transaction
 from django.test import Client
 from django.urls import reverse
+from django.utils import timezone
+
+from accounts.models import SignInAttempt
 
 SIGNUP_DATA = {
     "username": "fresh-thinker",
@@ -728,3 +733,119 @@ def test_an_expired_reset_link_no_longer_works(
     assert not response.context["validlink"]
     verified.refresh_from_db()
     assert verified.check_password("customer123")
+
+
+# --- Sign-in attempt history --------------------------------------------------
+
+
+def sign_in(client, username, password):
+    return client.post(
+        reverse("accounts:login"), {"username": username, "password": password}
+    )
+
+
+def attempts():
+    return [
+        (a.username, a.succeeded, a.kind) for a in SignInAttempt.objects.order_by("pk")
+    ]
+
+
+def test_a_successful_sign_in_is_recorded(client, customer):
+    sign_in(client, "customer", "customer123")
+
+    assert attempts() == [("customer", True, "sign_in")]
+
+
+def test_a_failed_sign_in_is_recorded(client, customer):
+    sign_in(client, "customer", "wrong")
+
+    assert attempts() == [("customer", False, "sign_in")]
+
+
+def test_a_sign_in_for_an_unknown_username_is_recorded(client, db):
+    sign_in(client, "nobody", "whatever")
+
+    assert attempts() == [("nobody", False, "sign_in")]
+
+
+def test_the_username_is_recorded_lowercase(client, customer):
+    sign_in(client, "CUSTOMER", "wrong")
+
+    assert attempts() == [("customer", False, "sign_in")]
+
+
+def test_an_empty_sign_in_form_records_nothing(client, customer):
+    sign_in(client, "customer", "")
+    sign_in(client, "", "customer123")
+
+    assert attempts() == []
+
+
+def test_a_completed_reset_records_a_password_reset(client, verified, mailoutbox):
+    request_reset(client, "old@example.com")
+
+    reset_password(client, mailoutbox[0])
+
+    assert attempts() == [("customer", True, "password_reset")]
+
+
+def test_my_account_shows_the_five_newest_attempts_newest_first(client, customer):
+    now = timezone.now()
+    for minutes_ago in range(6, 0, -1):
+        SignInAttempt.objects.create(
+            username="customer",
+            succeeded=True,
+            created_at=now - timedelta(minutes=minutes_ago),
+        )
+    client.force_login(customer)
+
+    shown = client.get(reverse("accounts:account")).context["recent_attempts"]
+
+    assert [a.created_at for a in shown] == [
+        now - timedelta(minutes=m) for m in range(1, 6)
+    ]
+
+
+def test_my_account_labels_each_kind_of_attempt(client, customer):
+    SignInAttempt.objects.record("customer", succeeded=True)
+    SignInAttempt.objects.record("customer", succeeded=False)
+    SignInAttempt.objects.record(
+        "customer", succeeded=True, kind=SignInAttempt.Kind.PASSWORD_RESET
+    )
+    client.force_login(customer)
+
+    response = client.get(reverse("accounts:account"))
+
+    assert [a.description for a in response.context["recent_attempts"]] == [
+        "Password reset",
+        "Failed sign-in",
+        "Signed in",
+    ]
+    assert "Password reset" in response.content.decode()
+
+
+def test_my_account_shows_only_my_own_attempts(client, customer, other_customer):
+    SignInAttempt.objects.record("someone-else", succeeded=False)
+    client.force_login(customer)
+
+    page = client.get(reverse("accounts:account")).content.decode()
+
+    assert "Failed sign-in" not in page
+    assert "No sign-in activity yet." in page
+
+
+def test_prune_deletes_attempts_older_than_90_days(db):
+    now = timezone.now()
+    old = SignInAttempt.objects.create(
+        username="customer", succeeded=False, created_at=now - timedelta(days=91)
+    )
+    recent = SignInAttempt.objects.create(
+        username="customer", succeeded=False, created_at=now - timedelta(days=89)
+    )
+
+    out = io.StringIO()
+    call_command("prune_signin_attempts", stdout=out)
+
+    assert not SignInAttempt.objects.filter(pk=old.pk).exists()
+    assert SignInAttempt.objects.filter(pk=recent.pk).exists()
+    assert "Deleted 1 old sign-in attempts." in out.getvalue()

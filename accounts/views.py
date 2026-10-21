@@ -31,7 +31,7 @@ from .forms import (
     SignInForm,
     SignupForm,
 )
-from .models import Address, User
+from .models import Address, SignInAttempt, User
 
 
 class SignupView(SuccessMessageMixin, CreateView):
@@ -160,6 +160,9 @@ class PasswordResetSetView(PasswordResetConfirmView):
     def form_valid(self, form):
         response = super().form_valid(form)
         form.user.send_password_changed_notice()
+        SignInAttempt.objects.record(
+            form.user.username, succeeded=True, kind=SignInAttempt.Kind.PASSWORD_RESET
+        )
         messages.success(
             self.request, "Your password has been reset. Sign in with the new one."
         )
@@ -194,9 +197,11 @@ class AccountView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        user = self.request.user
         context["addresses"] = sorted(
-            self.request.user.addresses.all(), key=lambda a: (a.label or a.name).lower()
+            user.addresses.all(), key=lambda a: (a.label or a.name).lower()
         )
+        context["recent_attempts"] = SignInAttempt.objects.for_user(user)[:5]
         return context
 
 

@@ -28,6 +28,85 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-20 — Manually verify Phase 6 of the account security center (sign-in attempt history) and log the build session
+
+### Prompts
+1. how would i manually verify the changes we agreed on in phase 6
+2. does this confirm the acceptance criterea of phase 6?
+3. okay thank you can you check off the acceptance critera in the plan and update the prompts.md file with a session log, and is there a way for you to log a previous session as well? the one where we agreed on phase six's design structure?
+
+### Summary
+- **Outcome:** Wrote a step-by-step manual check for Phase 6, built from
+  the plan's acceptance criteria and the uncommitted code: setup
+  (`migrate`, `seed`, `tailwind runserver`), then a successful sign-in, a
+  failed one, the lowercase username, the 5-row limit, a password reset
+  (link copied from the server terminal), an unknown username (checked
+  in the Django shell), the prune command (one attempt made 91 days old
+  and one 89 days old in the shell, so exactly one is deleted), and
+  `uv run pytest accounts/test_security.py`. Then mapped each criterion
+  to those steps. No code was changed this session. Only this log was
+  added.
+- **Deviations:** Follow-up question: does the walkthrough confirm every
+  criterion? Answer: mostly. The "for the signed-in user" part of the
+  My account criterion wasn't checked by hand, so an extra step was
+  added: sign in as a different demo user and confirm none of
+  customer's attempts show. For the "tests cover" criterion, the new
+  test names were listed under recording, activity list, and prune,
+  because a passing run alone doesn't show what is covered. The
+  request to check off the criteria needed no edit: the build session
+  had already ticked all six Phase 6 boxes. The previous session was
+  logged by reading its saved transcript. That transcript showed the
+  Phase 6 design wasn't agreed in that session. It came from the plan,
+  which was designed in the 2026-10-14 `/grill-me` session (already
+  logged). The build session only said "Do Phase 6."
+- **Sideways:** Nothing broke. The manual steps were written but not run
+  by the agent. The manual check itself is still the user's to do.
+
+## 2026-10-19 — Build Phase 6 of the account security center (sign-in attempt history)
+
+*Logged afterwards, on 2026-10-20, from the saved session transcript.*
+
+### Prompts
+1. @prd/account-security-center.md @plans/account-security-center.md Do Phase 6.
+2. okay how do i puase this sesion
+3. how can i vrify the changes weve agreed on manually
+
+### Summary
+- **Outcome:** Built Phase 6 of `plans/account-security-center.md`:
+  - New `SignInAttempt` model in `accounts/models.py`: username (lowercased
+    on save), `created_at`, `succeeded`, and `kind` (sign-in or password
+    reset). It's keyed by the username as typed, not a foreign key, so
+    attempts on usernames that don't exist are saved too. No IP address
+    is kept. Its queryset has `record()`, `for_user()`, and `stale()`
+    (older than `RETENTION`, 90 days). It has a `description` property
+    that gives "Signed in", "Failed sign-in", or "Password reset".
+  - Migration `accounts/migrations/0005_signinattempt.py`.
+  - `SignInForm.clean()` records a success or failure whenever both a
+    username and a password are given. If either box is empty, nothing
+    is recorded.
+  - `PasswordResetSetView.form_valid` records a "password reset" attempt.
+    `AccountView` passes the 5 newest attempts to the page.
+  - A "Recent activity" card on `templates/accounts/account.html`: a
+    green or red dot, the label, and the time, or "No sign-in activity
+    yet."
+  - New command `accounts/management/commands/prune_signin_attempts.py`.
+  - 10 new tests in `accounts/test_security.py`. The full suite passed
+    (376), and after a final tidy-up in `views.py` the accounts tests
+    passed (118). `ruff check` and `ruff format` were clean. Phase 6
+    boxes were ticked in the plan. Nothing committed.
+- **Deviations:** One addition the plan didn't list: `seed` now also
+  deletes the demo users' sign-in attempts. Because attempts are matched
+  by username, a reseeded `customer` would otherwise see the old
+  account's activity. Follow-up questions: how to pause the session
+  (answered: `/exit` or Ctrl+C twice, then `claude --continue` or
+  `claude --resume` to come back), and how to verify the changes
+  manually (answered with a browser checklist).
+- **Sideways:** Remembering that `ruff format` had changed an unrelated
+  line in `views.py` before, the agent checked its diff first and only
+  formatted the new files. The session ended before the manual check,
+  and the work was left uncommitted. As before, `uv run` printed the
+  harmless `VIRTUAL_ENV` mismatch warning.
+
 ## 2026-10-18 — Check Phase 4 and build Phase 5 of the account security center (forgotten password reset)
 
 ### Prompts

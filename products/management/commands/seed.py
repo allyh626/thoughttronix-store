@@ -27,7 +27,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
-from accounts.models import Address
+from accounts.models import Address, SignInAttempt
 from orders.models import Cart, Coupon, Order, OrderItem
 from products.models import Category, Product, Tag
 from products.validators import validate_product_image
@@ -578,6 +578,9 @@ class Command(BaseCommand):
             username for username, *_ in BACKGROUND_CUSTOMERS
         ]
         get_user_model().objects.filter(username__in=managed_usernames).delete()
+        # Attempts are keyed by username, not a foreign key — clear them too,
+        # or the rebuilt demo users would inherit the old activity.
+        SignInAttempt.objects.filter(username__in=managed_usernames).delete()
 
     def _create_tags(self):
         return {
