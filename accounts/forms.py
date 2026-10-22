@@ -99,6 +99,29 @@ class ConfirmPasswordForm(forms.Form):
         return password
 
 
+class DeleteAccountForm(ConfirmPasswordForm):
+    """Delete the account: the current password, an explicit "I understand"
+    box, and no orders still on their way."""
+
+    confirm = forms.BooleanField(
+        label="I understand my account will be deleted and this can't be undone.",
+        error_messages={"required": "Tick the box to confirm."},
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["confirm"].widget.attrs["class"] = "checkbox"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if self.user.has_open_orders():
+            raise forms.ValidationError(
+                "You can delete your account once your open orders are "
+                "delivered or cancelled."
+            )
+        return cleaned_data
+
+
 class ChangePasswordForm(PasswordChangeForm):
     """The stock password change form — current password, then the new one
     twice, checked against ``AUTH_PASSWORD_VALIDATORS`` — in DaisyUI."""

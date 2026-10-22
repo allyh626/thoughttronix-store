@@ -79,6 +79,33 @@ class User(AbstractUser):
         self.session_salt = new_session_salt()
         self.save(update_fields=["session_salt"])
 
+    def open_orders(self) -> models.QuerySet:
+        """Orders still Placed or Shipped — the ones that block deletion."""
+        Status = self.orders.model.Status
+        return self.orders.filter(status__in=[Status.PLACED, Status.SHIPPED])
+
+    def has_open_orders(self) -> bool:
+        """True while any order is still Placed or Shipped."""
+        return self.open_orders().exists()
+
+    @transaction.atomic
+    def deactivate(self) -> None:
+        """Delete the account's personal data but keep the row, so its past
+        orders stay attached and the store's totals don't change.
+
+        Signs in nowhere afterward: the password is unusable, ``is_active``
+        is off, and the new ``session_salt`` ends every session.
+        """
+        self.is_active = False
+        self.username = f"deleted-user-{self.pk}"
+        self.first_name = self.last_name = ""
+        self.email = self.pending_email = None
+        self.email_verified = False
+        self.set_unusable_password()
+        self.session_salt = new_session_salt()
+        self.save()
+        self.addresses.all().delete()
+
     @property
     def email_to_confirm(self) -> str | None:
         """The address a verification link confirms: a pending change if

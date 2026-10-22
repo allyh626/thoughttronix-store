@@ -1,6 +1,6 @@
 from django.contrib import messages
-from django.contrib.auth import update_session_auth_hash
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth import logout, update_session_auth_hash
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.views import (
     LoginView,
     LogoutView,
@@ -28,6 +28,7 @@ from .forms import (
     ChangeEmailForm,
     ChangePasswordForm,
     ConfirmPasswordForm,
+    DeleteAccountForm,
     PasswordResetRequestForm,
     ResetPasswordForm,
     SignInForm,
@@ -145,6 +146,37 @@ class SignOutOtherDevicesView(LoginRequiredMixin, FormView):
         # The new salt ended this session too; re-stamp it so it stays.
         update_session_auth_hash(self.request, self.request.user)
         messages.success(self.request, "Every other device has been signed out.")
+        return super().form_valid(form)
+
+
+class DeleteAccountView(LoginRequiredMixin, UserPassesTestMixin, FormView):
+    """Confirm with the current password, then wipe the account's personal
+    data and sign out. Orders are kept. Staff and superusers get 403, so
+    the back office can't lock itself out."""
+
+    form_class = DeleteAccountForm
+    template_name = "accounts/delete_account.html"
+    success_url = reverse_lazy("products:catalog")
+
+    def test_func(self):
+        user = self.request.user
+        return not (user.is_staff or user.is_superuser)
+
+    def get_form_kwargs(self):
+        return {**super().get_form_kwargs(), "user": self.request.user}
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["open_orders"] = self.request.user.open_orders()
+        return context
+
+    def form_valid(self, form):
+        self.request.user.deactivate()
+        logout(self.request)
+        # After logout, or flushing the session would wipe the message.
+        messages.success(
+            self.request, "Your account has been deleted. Thanks for thinking with us."
+        )
         return super().form_valid(form)
 
 

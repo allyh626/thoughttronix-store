@@ -4,6 +4,7 @@ verification links, and the Sign-in & security section of My account."""
 import io
 import re
 from datetime import datetime, timedelta
+from decimal import Decimal
 from http import HTTPStatus
 
 import pytest
@@ -16,6 +17,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import SignInAttempt
+from dashboard import queries
+from orders.models import Order
 
 SIGNUP_DATA = {
     "username": "fresh-thinker",
@@ -1131,3 +1134,182 @@ def test_sign_out_others_returns_to_my_account_with_a_message(client, customer):
 
     assert response.redirect_chain[-1][0] == reverse("accounts:account")
     assert "Every other device has been signed out." in response.content.decode()
+
+
+# --- Deleting an account ------------------------------------------------------
+
+
+def make_order(user, status):
+    return Order.objects.create(
+        user=user,
+        status=status,
+        total=Decimal("9.00"),
+        email="casey@example.com",
+        shipping_name="Casey Monroe",
+        shipping_street="9 Synapse Court",
+        shipping_city="Canyon",
+        shipping_state="TX",
+        shipping_zip="79015",
+        billing_name="Casey Monroe",
+        billing_street="9 Synapse Court",
+        billing_city="Canyon",
+        billing_state="TX",
+        billing_zip="79015",
+        card_last4="4242",
+    )
+
+
+def delete_account(client, password="customer123", confirm=True, **kwargs):
+    data = {"password": password}
+    if confirm:
+        data["confirm"] = "on"
+    return client.post(reverse("accounts:delete_account"), data, **kwargs)
+
+
+@pytest.mark.parametrize(
+    ("status", "is_open"),
+    [
+        (Order.Status.PLACED, True),
+        (Order.Status.SHIPPED, True),
+        (Order.Status.DELIVERED, False),
+        (Order.Status.CANCELLED, False),
+    ],
+)
+def test_has_open_orders_only_for_placed_or_shipped(customer, status, is_open):
+    make_order(customer, status)
+
+    assert customer.has_open_orders() is is_open
+
+
+def test_has_open_orders_is_false_without_orders(customer):
+    assert not customer.has_open_orders()
+
+
+def test_deactivate_wipes_personal_data_but_keeps_the_row(verified, address):
+    verified.first_name, verified.last_name = "Casey", "Monroe"
+    verified.pending_email = "new@example.com"
+    verified.save()
+    salt = verified.session_salt
+
+    verified.deactivate()
+
+    verified.refresh_from_db()
+    assert not verified.is_active
+    assert verified.username == f"deleted-user-{verified.pk}"
+    assert (verified.first_name, verified.last_name) == ("", "")
+    assert verified.email is None
+    assert verified.pending_email is None
+    assert not verified.email_verified
+    assert not verified.has_usable_password()
+    assert verified.session_salt != salt
+    assert not verified.addresses.exists()
+
+
+def test_delete_account_requires_sign_in(client, db):
+    response = client.get(reverse("accounts:delete_account"))
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert reverse("accounts:login") in response.url
+
+
+def test_my_account_links_to_delete_account(client, customer):
+    client.force_login(customer)
+
+    page = client.get(reverse("accounts:account")).content.decode()
+
+    assert reverse("accounts:delete_account") in page
+
+
+def test_delete_account_rejects_a_wrong_password(client, customer):
+    client.force_login(customer)
+
+    response = delete_account(client, password="wrong")
+
+    assert response.context["form"].errors["password"]
+    customer.refresh_from_db()
+    assert customer.is_active
+
+
+def test_delete_account_requires_the_confirmation(client, customer):
+    client.force_login(customer)
+
+    response = delete_account(client, confirm=False)
+
+    assert response.context["form"].errors["confirm"] == ["Tick the box to confirm."]
+    customer.refresh_from_db()
+    assert customer.is_active
+
+
+def test_open_orders_block_deletion_and_are_listed(client, customer):
+    placed = make_order(customer, Order.Status.PLACED)
+    shipped = make_order(customer, Order.Status.SHIPPED)
+    delivered = make_order(customer, Order.Status.DELIVERED)
+    client.force_login(customer)
+
+    page = client.get(reverse("accounts:delete_account")).content.decode()
+    response = delete_account(client)
+
+    assert placed.number in page
+    assert shipped.number in page
+    assert delivered.number not in page
+    assert "once your open orders are delivered or cancelled" in " ".join(
+        response.context["form"].non_field_errors()
+    )
+    customer.refresh_from_db()
+    assert customer.is_active
+
+
+def test_staff_cannot_delete_their_account(client, staff_user):
+    client.force_login(staff_user)
+
+    response = client.post(
+        reverse("accounts:delete_account"),
+        {"password": "employee123", "confirm": "on"},
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    staff_user.refresh_from_db()
+    assert staff_user.is_active
+
+
+def test_superusers_cannot_delete_their_account(client, superuser):
+    client.force_login(superuser)
+
+    response = client.post(
+        reverse("accounts:delete_account"), {"password": "admin123", "confirm": "on"}
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    superuser.refresh_from_db()
+    assert superuser.is_active
+
+
+def test_staff_dont_see_the_delete_link(client, staff_user):
+    client.force_login(staff_user)
+
+    page = client.get(reverse("accounts:account")).content.decode()
+
+    assert reverse("accounts:delete_account") not in page
+
+
+def test_deleting_signs_out_says_goodbye_and_keeps_orders(client, customer):
+    delivered = make_order(customer, Order.Status.DELIVERED)
+    make_order(customer, Order.Status.CANCELLED)
+    revenue, count = queries.total_revenue(), queries.order_count()
+    client.force_login(customer)
+
+    response = delete_account(client, follow=True)
+
+    assert response.redirect_chain[-1][0] == reverse("products:catalog")
+    assert "Your account has been deleted." in response.content.decode()
+    assert not response.wsgi_request.user.is_authenticated
+    assert Order.objects.filter(pk=delivered.pk, user=customer).exists()
+    assert Order.objects.filter(user=customer).count() == 2
+    assert (queries.total_revenue(), queries.order_count()) == (revenue, count)
+
+
+def test_a_deleted_account_cannot_sign_in(client, customer):
+    client.force_login(customer)
+    delete_account(client)
+
+    assert not Client().login(username="customer", password="customer123")

@@ -271,17 +271,17 @@ attached.
 
 ### Acceptance criteria
 
-- [ ] `has_open_orders()` is true only for Placed or Shipped orders
-- [ ] `deactivate()` sets `is_active=False`; clears the email, pending
+- [x] `has_open_orders()` is true only for Placed or Shipped orders
+- [x] `deactivate()` sets `is_active=False`; clears the email, pending
       email, and verification; renames the username to `deleted-user-<pk>`;
       makes the password unusable; deletes saved addresses; and changes
       `session_salt`
-- [ ] A wrong password or a missing confirmation refuses the deletion
-- [ ] Open orders block deletion and are listed by number
-- [ ] Staff and superusers are refused
-- [ ] On success the user is signed out with a farewell message, the orders
+- [x] A wrong password or a missing confirmation refuses the deletion
+- [x] Open orders block deletion and are listed by number
+- [x] Staff and superusers are refused
+- [x] On success the user is signed out with a farewell message, the orders
       still exist, and the dashboard totals are unchanged
-- [ ] Tests cover each case above
+- [x] Tests cover each case above
 
 ---
 

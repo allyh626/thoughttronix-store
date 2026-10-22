@@ -151,4 +151,18 @@
       </div>
     {% endif %}
   </section>
+
+  {% if not user.is_staff and not user.is_superuser %}
+    <section class="mt-8">
+      <div class="card border border-error bg-base-300 shadow-md">
+        <div class="card-body">
+          <h3 class="card-title text-base text-error">Delete account</h3>
+          <p class="text-sm opacity-70">Leave the store and erase your account details. Past orders are kept.</p>
+          <div class="card-actions mt-2">
+            <a href="{% url 'accounts:delete_account' %}" class="btn btn-error btn-sm">Delete account</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  {% endif %}
 {% endblock %}

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}Delete account — The ThoughtTronix Store{% endblock %}
+
+{% block content %}
+  <div class="card mx-auto max-w-lg bg-base-100 shadow-md">
+    <div class="card-body">
+      <h1 class="text-3xl font-bold">Delete account</h1>
+      <p class="opacity-70">
+        Your sign-in, email, and saved addresses will be erased, and you'll be
+        signed out everywhere. Your past orders are kept for the store's records.
+      </p>
+      {% if open_orders %}
+        <div role="alert" class="alert alert-warning mt-2">
+          <div>
+            <p>You can delete your account once these orders are delivered or cancelled:</p>
+            <ul class="mt-2 list-inside list-disc">
+              {% for order in open_orders %}
+                <li>
+                  <a href="{% url 'orders:detail' order.pk %}" class="link">{{ order.number }}</a>
+                  — {{ order.get_status_display }}
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+        <div class="mt-2 flex justify-end">
+          <a href="{% url 'accounts:account' %}" class="btn btn-ghost">Back to My account</a>
+        </div>
+      {% else %}
+        <form method="post" class="mt-2 space-y-4">
+          {% csrf_token %}
+          {% for error in form.non_field_errors %}
+            <div class="alert alert-error" role="alert"><span>{{ error }}</span></div>
+          {% endfor %}
+          {% include "accounts/partials/_field.html" with field=form.password %}
+          <div>
+            <label class="label cursor-pointer justify-start gap-3" for="{{ form.confirm.id_for_label }}">
+              {{ form.confirm }}
+              <span>{{ form.confirm.label }}</span>
+            </label>
+            {% for error in form.confirm.errors %}
+              <p class="mt-1 text-sm text-error">{{ error }}</p>
+            {% endfor %}
+          </div>
+          <div class="mt-2 flex items-center justify-end gap-2">
+            <a href="{% url 'accounts:account' %}" class="btn btn-ghost">Cancel</a>
+            <button type="submit" class="btn btn-error">Delete my account</button>
+          </div>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

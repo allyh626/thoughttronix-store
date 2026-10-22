@@ -31,6 +31,7 @@ urlpatterns = [
         views.SignOutOtherDevicesView.as_view(),
         name="sign_out_other_devices",
     ),
+    path("delete/", views.DeleteAccountView.as_view(), name="delete_account"),
     path(
         "password/reset/",
         views.PasswordResetRequestView.as_view(),
