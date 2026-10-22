@@ -35,6 +35,35 @@ def test_checkout_prefills_each_section_from_its_default(
     assert 'value="12 Cortex Lane"' in response.content.decode()
 
 
+def test_checkout_prefills_the_account_email(client, customer, cart_item):
+    customer.email = "casey@example.com"
+    customer.save()
+    client.force_login(customer)
+
+    response = client.get(reverse("orders:checkout"))
+
+    assert response.context["form"].initial["email"] == "casey@example.com"
+    assert 'value="casey@example.com"' in response.content.decode()
+
+
+def test_checkout_email_is_blank_without_an_account_email(client, customer, cart_item):
+    client.force_login(customer)
+
+    response = client.get(reverse("orders:checkout"))
+
+    assert "email" not in response.context["form"].initial
+
+
+def test_the_order_keeps_an_edited_email(client, customer, cart_item):
+    customer.email = "casey@example.com"
+    customer.save()
+    client.force_login(customer)
+
+    client.post(reverse("orders:checkout"), {**VALID_DATA, "email": "gift@example.com"})
+
+    assert Order.objects.get().email == "gift@example.com"
+
+
 def test_no_picker_with_an_empty_address_book(client, customer, cart_item):
     client.force_login(customer)
 

@@ -28,6 +28,35 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-21 — Build Phase 10 of the account security center (checkout email pre-fill)
+
+### Prompts
+1. @prd/account-security-center.md @plans/account-security-center.md Do Phase 10.
+2. append a session log to PROMPTS.md
+
+### Summary
+- **Outcome:** Built Phase 10 of `plans/account-security-center.md`, the
+  last phase of the plan:
+  - `CheckoutView.get_initial()` in `orders/views.py` now pre-fills the
+    checkout email field with the account's email, verified or not,
+    alongside the existing saved-address pre-fill. Accounts without an
+    email get a blank field. The customer can still edit it, and the order
+    copies whatever is submitted. No order or service code changed.
+  - 3 tests in `orders/test_checkout_addresses.py`: the account email is
+    pre-filled, an account with no email gets a blank field, and an edited
+    email is what the order stores. Phase 10 boxes ticked in the plan. Full
+    suite: 421 passed; `ruff check` and `ruff format --check` clean.
+    Nothing committed.
+- **Deviations:** No recommendations were overridden and no follow-up
+  questions were asked. Following the saved preference, the agent explained
+  each edit before making it and each one went through the approval prompt.
+  The agent put the new tests in the existing checkout pre-fill test file
+  rather than a new file, without asking.
+- **Sideways:** Nothing broke. As in earlier sessions, every `uv run`
+  printed a warning that the outer `VIRTUAL_ENV`
+  (`C:\Users\ally\CIDM3312\.venv`) doesn't match the project `.venv`; uv
+  used the project environment, so it was noise only.
+
 ## 2026-10-21 — Build Phase 9 of the account security center (delete account) and restyle its box
 
 ### Prompts

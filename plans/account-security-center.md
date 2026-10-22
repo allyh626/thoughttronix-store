@@ -297,7 +297,7 @@ still edit it, and the order copies whatever is submitted.
 
 ### Acceptance criteria
 
-- [ ] Checkout's initial data includes the account email when one exists
-- [ ] An account without an email gets an empty field
-- [ ] A submitted, edited email is what the order stores
-- [ ] Tests cover all three
+- [x] Checkout's initial data includes the account email when one exists
+- [x] An account without an email gets an empty field
+- [x] A submitted, edited email is what the order stores
+- [x] Tests cover all three

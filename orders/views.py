@@ -153,8 +153,10 @@ class CheckoutView(LoginRequiredMixin, FormView):
         return super().dispatch(request, *args, **kwargs)
 
     def get_initial(self):
-        """Pre-fill each address section from the customer's default."""
+        """Pre-fill the account email and each address section's default."""
         initial = super().get_initial()
+        if self.request.user.email:
+            initial["email"] = self.request.user.email
         for kind in Address.KINDS:
             address = self.request.user.addresses.default_for(kind)
             if address:
