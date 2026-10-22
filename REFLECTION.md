@@ -1,3 +1,16 @@
+### ACCOUNT SECURITY CENTER
+##  QUESTION 01
+    Phase 09 was descrived to create a "delete account" feature, once this behavior is enacted the account is wiped but not completeky removed from the database, past orders stay attached to the deatctivated account as not to mess up fiancial calculations within the company's system. If a user has orders which are still placed or shipped it will instruct the user to cancel them before allowing account deletion. When the agent implemented this I thought everything with the tests worked well but the feature was just thrown in the middle of the other account settings, I felt for such a behavior there should be obvious identifying features of the delete account box, I asked the agent to make it more vidible and separate it from the regular everyday account settings.
+
+## QUESTION 02
+
+
+## QUESTION 03
+
+
+## QUESTION 04
+    phase 05
+
 ### PRODUCT IMAGES
 ## QUESTION 01
     A gril me decision that I had questioned the agents reccomendation on was the duplicate photo which I chose to use one and discard the other, I was debating on saving it in the repo elsewhere but thought it would be redundant so I just chose one. This was just a slight deviation from what the agent origianllly recommended but it was one of the only times I felt the agent didn't recommend exactly what I wanted implemented. Anytime I feel confused on a piece of information it gives me I ask follow up questions and often times don't need toa sk more than one follow-up question to improve my understanding.
