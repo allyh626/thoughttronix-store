@@ -77,6 +77,28 @@ class ChangeEmailForm(forms.Form):
         return self.user
 
 
+class ConfirmPasswordForm(forms.Form):
+    """Confirm a sensitive action, like signing out other devices, with the
+    current password."""
+
+    password = forms.CharField(
+        label="Current password", strip=False, widget=forms.PasswordInput
+    )
+
+    def __init__(self, user, *args, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+        self.fields["password"].widget.attrs["class"] = "input w-full"
+
+    def clean_password(self):
+        password = self.cleaned_data["password"]
+        if not self.user.check_password(password):
+            raise forms.ValidationError(
+                "Your current password was entered incorrectly."
+            )
+        return password
+
+
 class ChangePasswordForm(PasswordChangeForm):
     """The stock password change form — current password, then the new one
     twice, checked against ``AUTH_PASSWORD_VALIDATORS`` — in DaisyUI."""

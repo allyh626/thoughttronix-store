@@ -28,6 +28,60 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-21 — Build Phase 8 of the account security center (sign out of all other devices)
+
+### Prompts
+1. @prd/account-security-center.md @plans/account-security-center.md Do Phase 8.
+2. can you run the tests for phase 8
+3. so to test phase 8 manually i run the migrations?
+4. okay thank you for giving me hte steps to verify it manually, can you update the prompts.md file with the decisions made in this session please
+
+### Summary
+- **Outcome:** Built Phase 8 of `plans/account-security-center.md`:
+  - `accounts.User` gained `session_salt` (32 random hex characters from
+    a module-level `new_session_salt()`), with migration
+    `accounts/migrations/0007_user_session_salt.py`. The session
+    fingerprint is now an HMAC of the password *plus* the salt, so a new
+    salt ends every session the way a new password does. A new
+    `rotate_session_salt()` method picks a fresh salt; Phase 9's
+    `deactivate()` is meant to reuse it.
+  - A new `ConfirmPasswordForm` in `accounts/forms.py` (one "Current
+    password" field), written to be reused by Phase 9's delete-account
+    page.
+  - `SignOutOtherDevicesView` (`LoginRequiredMixin` + `FormView`) at
+    `/accounts/sessions/sign-out-others/` (`accounts:sign_out_other_devices`).
+    With the right password it rotates the salt, re-stamps the current
+    session with `update_session_auth_hash`, and returns to My account
+    with "Every other device has been signed out." A wrong password shows
+    an error and changes nothing.
+  - A confirmation page `templates/accounts/sign_out_other_devices.html`,
+    modeled on the change-password page, and a new "Devices" card on My
+    account between Password and Recent activity.
+  - 7 tests in `accounts/test_security.py`, using two `Client()`s as two
+    devices. Phase 8 boxes ticked in the plan. Full suite: 402 passed;
+    `ruff check` and `ruff format --check` clean. The 7 Phase 8 tests were
+    re-run on request and passed. Nothing committed.
+- **Deviations:** The plan named `get_session_auth_hash` as the method to
+  change. The agent overrode Django's private `_get_session_auth_hash`
+  helper instead, because both `get_session_auth_hash` and its
+  `SECRET_KEY_FALLBACKS` twin call it, and reported this to the user. The
+  agent chose the URL, the "Devices" card, and the reusable form without
+  asking. The agent made the edits directly, explaining each one before
+  making it, rather than asking at the start which way the user wanted to
+  work. Follow-up questions: how to run just the Phase 8 tests (answered
+  with a `pytest -k` command, explained piece by piece), and whether
+  manual testing starts with the migration (yes; answered with a
+  checklist using a normal and a private browser window as two devices,
+  signed in as the seeded `customer`). At the time of this entry the
+  agent had not seen the migration applied or the manual check done.
+- **Sideways:** Nothing failed. The migration's callable default runs
+  once for existing rows, so users who existed before the migration
+  share one salt until it is rotated. This is harmless, because the
+  password is in the fingerprint too, but it was not raised with the
+  user during the session. A first attempt to edit this log used the
+  wrong anchor text and was refused before it changed anything. As
+  before, `uv run` printed the harmless `VIRTUAL_ENV` mismatch warning.
+
 ## 2026-10-21 — Build Phase 7 of the account security center (sign-in lockout), extend it to the Django admin login
 
 ### Prompts

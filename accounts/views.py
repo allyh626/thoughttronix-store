@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import (
     LoginView,
@@ -26,6 +27,7 @@ from .forms import (
     AddressForm,
     ChangeEmailForm,
     ChangePasswordForm,
+    ConfirmPasswordForm,
     PasswordResetRequestForm,
     ResetPasswordForm,
     SignInForm,
@@ -125,6 +127,25 @@ class ChangePasswordView(PasswordChangeView):
             "Password changed. Every other device has been signed out.",
         )
         return response
+
+
+class SignOutOtherDevicesView(LoginRequiredMixin, FormView):
+    """Confirm with the current password, then end every session but this
+    one by changing ``session_salt``."""
+
+    form_class = ConfirmPasswordForm
+    template_name = "accounts/sign_out_other_devices.html"
+    success_url = reverse_lazy("accounts:account")
+
+    def get_form_kwargs(self):
+        return {**super().get_form_kwargs(), "user": self.request.user}
+
+    def form_valid(self, form):
+        self.request.user.rotate_session_salt()
+        # The new salt ended this session too; re-stamp it so it stays.
+        update_session_auth_hash(self.request, self.request.user)
+        messages.success(self.request, "Every other device has been signed out.")
+        return super().form_valid(form)
 
 
 # --- Forgotten password -------------------------------------------------------

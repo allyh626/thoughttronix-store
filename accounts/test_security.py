@@ -1052,3 +1052,82 @@ def test_my_account_labels_a_refused_admin_sign_in(client, customer):
     page = client.get(reverse("accounts:account")).content.decode()
 
     assert "Attempted admin sign-in" in page
+
+
+# --- Signing out other devices ------------------------------------------------
+
+
+def two_devices():
+    this_device, other_device = Client(), Client()
+    assert this_device.login(username="customer", password="customer123")
+    assert other_device.login(username="customer", password="customer123")
+    return this_device, other_device
+
+
+def sign_out_others(client, password="customer123", **kwargs):
+    return client.post(
+        reverse("accounts:sign_out_other_devices"), {"password": password}, **kwargs
+    )
+
+
+def is_signed_in(client):
+    return client.get(reverse("accounts:account")).status_code == HTTPStatus.OK
+
+
+def test_every_user_gets_a_session_salt(customer, other_customer):
+    assert len(customer.session_salt) == 32
+    assert customer.session_salt != other_customer.session_salt
+
+
+def test_the_session_fingerprint_includes_the_salt(customer):
+    before = customer.get_session_auth_hash()
+
+    customer.rotate_session_salt()
+
+    assert customer.get_session_auth_hash() != before
+
+
+def test_sign_out_others_requires_sign_in(client, db):
+    response = client.get(reverse("accounts:sign_out_other_devices"))
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert reverse("accounts:login") in response.url
+
+
+def test_my_account_links_to_sign_out_others(client, customer):
+    client.force_login(customer)
+
+    page = client.get(reverse("accounts:account")).content.decode()
+
+    assert reverse("accounts:sign_out_other_devices") in page
+
+
+def test_sign_out_others_keeps_this_device_and_signs_out_others(customer):
+    this_device, other_device = two_devices()
+
+    sign_out_others(this_device)
+
+    assert is_signed_in(this_device)
+    assert not is_signed_in(other_device)
+
+
+def test_sign_out_others_with_a_wrong_password_changes_nothing(customer):
+    this_device, other_device = two_devices()
+    salt = customer.session_salt
+
+    response = sign_out_others(this_device, password="wrong")
+
+    assert response.context["form"].errors["password"]
+    customer.refresh_from_db()
+    assert customer.session_salt == salt
+    assert is_signed_in(this_device)
+    assert is_signed_in(other_device)
+
+
+def test_sign_out_others_returns_to_my_account_with_a_message(client, customer):
+    client.force_login(customer)
+
+    response = sign_out_others(client, follow=True)
+
+    assert response.redirect_chain[-1][0] == reverse("accounts:account")
+    assert "Every other device has been signed out." in response.content.decode()

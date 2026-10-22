@@ -1,3 +1,4 @@
+import secrets
 from collections.abc import Mapping
 from datetime import timedelta
 from typing import Any
@@ -10,6 +11,7 @@ from django.db import models, transaction
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.crypto import salted_hmac
 
 from .validators import US_STATES, zip_validator
 
@@ -19,6 +21,11 @@ ADDRESS_FIELDS = ["name", "street", "line2", "city", "state", "zip"]
 
 # Keeps verification tokens from being valid anywhere else Django signs data.
 VERIFY_EMAIL_SALT = "accounts.verify-email"
+
+
+def new_session_salt() -> str:
+    """A fresh random ``User.session_salt``."""
+    return secrets.token_hex(16)
 
 
 class User(AbstractUser):
@@ -41,6 +48,9 @@ class User(AbstractUser):
     # current email stays in effect. Not unique: two accounts may both
     # claim an address, and only the first to confirm gets it.
     pending_email = models.EmailField(null=True, blank=True)  # noqa: DJ001
+    # Mixed into the session fingerprint: changing it signs out every
+    # session, the same way changing the password does.
+    session_salt = models.CharField(max_length=32, default=new_session_salt)
 
     def save(self, *args, **kwargs):
         # Django's user manager turns a missing email into "", which would
@@ -50,6 +60,24 @@ class User(AbstractUser):
             self.pending_email.strip().lower() if self.pending_email else None
         )
         super().save(*args, **kwargs)
+
+    def _get_session_auth_hash(self, secret=None):
+        # Django's own fingerprint is an HMAC of the password; this one adds
+        # ``session_salt``. Overriding the private helper means both
+        # ``get_session_auth_hash`` and its SECRET_KEY_FALLBACKS twin use it.
+        key_salt = "django.contrib.auth.models.AbstractBaseUser.get_session_auth_hash"
+        return salted_hmac(
+            key_salt,
+            self.password + self.session_salt,
+            secret=secret,
+            algorithm="sha256",
+        ).hexdigest()
+
+    def rotate_session_salt(self) -> None:
+        """Change ``session_salt``, ending every session. Keep the current
+        one afterward with ``update_session_auth_hash``."""
+        self.session_salt = new_session_salt()
+        self.save(update_fields=["session_salt"])
 
     @property
     def email_to_confirm(self) -> str | None:

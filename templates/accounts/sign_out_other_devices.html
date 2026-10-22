@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Sign out of all other devices — The ThoughtTronix Store{% endblock %}
+
+{% block content %}
+  <div class="card mx-auto max-w-lg bg-base-100 shadow-md">
+    <div class="card-body">
+      <h1 class="text-3xl font-bold">Sign out of all other devices</h1>
+      <p class="opacity-70">
+        You'll stay signed in here. Every other phone, tablet, or computer
+        signed in to your account will be signed out.
+      </p>
+      <form method="post" class="mt-2 space-y-4">
+        {% csrf_token %}
+        {% for error in form.non_field_errors %}
+          <div class="alert alert-error" role="alert"><span>{{ error }}</span></div>
+        {% endfor %}
+        {% for field in form %}
+          {% include "accounts/partials/_field.html" %}
+        {% endfor %}
+        <div class="mt-2 flex items-center justify-end gap-2">
+          <a href="{% url 'accounts:account' %}" class="btn btn-ghost">Cancel</a>
+          <button type="submit" class="btn btn-primary">Sign out other devices</button>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

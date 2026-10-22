@@ -245,14 +245,14 @@ expected.
 
 ### Acceptance criteria
 
-- [ ] `session_salt` field and migration exist, and `get_session_auth_hash`
+- [x] `session_salt` field and migration exist, and `get_session_auth_hash`
       includes it
-- [ ] The action is a POST that requires the current password, and a wrong
+- [x] The action is a POST that requires the current password, and a wrong
       password changes nothing
-- [ ] The current session stays signed in, and another session is signed
+- [x] The current session stays signed in, and another session is signed
       out
-- [ ] It returns to My account with a flash message
-- [ ] Tests use two clients to show one stays and one is signed out
+- [x] It returns to My account with a flash message
+- [x] Tests use two clients to show one stays and one is signed out
 
 ---
 
