@@ -3,13 +3,15 @@
     Phase 09 was descrived to create a "delete account" feature, once this behavior is enacted the account is wiped but not completeky removed from the database, past orders stay attached to the deatctivated account as not to mess up fiancial calculations within the company's system. If a user has orders which are still placed or shipped it will instruct the user to cancel them before allowing account deletion. When the agent implemented this I thought everything with the tests worked well but the feature was just thrown in the middle of the other account settings, I felt for such a behavior there should be obvious identifying features of the delete account box, I asked the agent to make it more vidible and separate it from the regular everyday account settings.
 
 ## QUESTION 02
+    ChangePasswordView is an authentication component used in my completed Account Security Center which is used to keep the user signed in when they sign out of all ofther devices from the account section of the website. The ChangePasswordView is the page where the signed-in user changes their password, located in accounts/views.py. The relevant line of code reads: class ChangePasswordView(PasswordChangeView): defining the parent class and behavior of the feature. It uses the ChangePasswordForm found in accounts/forms.py. It is built off Django's PasswordChangeForm in order to check the password acceptance criteria.
+    The SignInAttempt authentication components logs every attempted sign-in to a user's account, located at accounts/models.py in row 236. The code is used to enfoce an account lockout when too many failed attempts are passed, this is one of the main features of the authentication and is implemented into the SignInForm(in accounts/forms.py) with: if SignInAttempt.objects.is_locked_out(username):raise forms.ValidationError(self.error_messages["locked_out"], code="locked_out"). This enforces the account lockout when more than 5 failed sign-in attempts are made.
 
-
-## QUESTION 03
-
+## QUESTION 03 - Password Reset
+    Password reset has been implemented through the views: PasswordResetView, PasswordResetDoneView, and PasswordResetConfirmView (located in accounts/views.py lines 190-222). My projects used these three out of the four mentiones password reset Django views in the lesson. PasswordResetCompoleteView is one mentioned in the lesson that was not implemented in my system, instead of using this view to send the user to a page letting them know their password has been reset, it redirects them to the sign in form instead. Resetting a password uses the PasswordResetRequestForm in accounts/forms.py line 135: class PasswordResetRequestForm(PasswordResetForm): to get the email the password reset is being sent to. It also uses the ResetPasswordForm in line 151: class ResetPasswordForm(SetPasswordForm): to allow the user to choose a new password. My implementation pattern is similar of that shown in the lesson and has few differences that make sense with the rules and design of the system I was trying to create.
 
 ## QUESTION 04
-    phase 05
+    Phase 05 was a pivotal phase in the development process that I feel was a useful stopping point as it fixed one of the issues outlined in the plan which was that a customer who forgot their password is locked out for good. All the previous phases worked towards building a verification system in which a customer should be able to use a verified email to send a password reset link, and phase five was the final step in the implementation of that behavior. This phase is the first time in the system where emails are used for a significant feature or behavior, before this emails were collected but not used for anything meaningful. Implementing this phase solved a problem that was specifically outlined in the prd's problem statement.
+
 
 ### PRODUCT IMAGES
 ## QUESTION 01
@@ -21,6 +23,7 @@
 
 ## QUESTION 03
     The upload process for the product image I uploaded starts in the location the file is stored on the disk: C: /Users/ally/CIDM3312/thoughttronix-store/media/products/mnemo.jpg, determined by the MEDIA_ROOT setting in config/settings.py. The value stored in the image field is denoted as products/mnemo.jpg, defined in the product model. The URL the browser then requests is served at /media/products/mnemo.jpg, which is defined in the MEDIA_URL setting in config/settings.py file. The static() tag in config/urls.py maps requests beginning with the MEDIA_URL to files under the MEDIA_ROOT which allows uploaded product images to display while the development server is running.
+
 
 ### DISCOUNT COUPONS
 ## QUESTION 01

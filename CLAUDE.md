@@ -17,7 +17,10 @@ A server-rendered Django 6 storefront and back office. The PRD (`prd/core-platfo
 
 - `config/` — the project package (settings, root urls)
 - `accounts/` — custom user model (`accounts.User`, `AbstractUser` + nullable
-  `job_title`). Roles are Django's own vocabulary: customers are plain users,
+  `job_title`, a unique nullable `email` stored lowercase, `email_verified`,
+  `pending_email` for a change awaiting confirmation, and `session_salt`,
+  mixed into `get_session_auth_hash` so changing it signs out every other
+  session). Roles are Django's own vocabulary: customers are plain users,
   employees are `is_staff`, the admin is `is_superuser`. No role field, no Groups.
   Also owns `Address` (the customer address book, with default
   shipping/billing flags), the My account page, and `accounts/validators.py`
