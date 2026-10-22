@@ -28,6 +28,60 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-21 — Build Phase 7 of the account security center (sign-in lockout), extend it to the Django admin login
+
+### Prompts
+1. @prd/account-security-center.md @plans/account-security-center.md Do Phase 7.
+2. yes could you add those few lines to close that gap in the design
+3. i dont want to count it as a failed sign in attempt if they are not staff, i would like to let the user know it was an attempted admin sign in but i dont want it to count towards thier account lockout
+4. okay perfect how would i manually check this phase in the browser
+5. okay perect the phase has been tested could you update the prompts.md fiel with this sessions decisions please
+
+### Summary
+- **Outcome:** Built Phase 7 of `plans/account-security-center.md`:
+  - `SignInAttempt` gained `LOCKOUT_THRESHOLD = 5` and
+    `LOCKOUT_WINDOW = 15 minutes`, and its queryset gained
+    `is_locked_out(username)`. It counts failed sign-ins in the last 15
+    minutes, but only those after the latest successful sign-in or
+    password reset (both recorded as succeeded).
+  - `SignInForm.clean()` checks the lockout before the password, so a
+    locked username is refused even with the right password, with "Too
+    many failed attempts — try again in a few minutes, or reset your
+    password." The message is the same for unknown usernames, and staff
+    and superusers sign in through the same form.
+  - 12 lockout tests in `accounts/test_security.py`. Phase 7 boxes were
+    ticked in the plan.
+  - Then, at the user's request, the Django admin login (`/admin/`) was
+    brought under the lockout: a new `AdminSignInForm(SignInForm,
+    AdminAuthenticationForm)` in `accounts/forms.py`, switched on with
+    `admin.site.login_form` in `accounts/admin.py`. Failures at both login
+    pages share one count. 4 more tests.
+  - Then a new attempt kind, `ADMIN_DENIED`: a non-staff account's
+    *correct* password at `/admin/` is recorded as that kind, shown on My
+    account as "Attempted admin sign-in", and never counted toward the
+    lockout. A wrong password at `/admin/` still counts as an ordinary
+    failure. Migration `accounts/migrations/0006_signinattempt_admin_denied.py`
+    (choices only, no column change). 4 more tests.
+  - Final suite: 395 passed; `ruff check` and `ruff format` clean. The
+    user tested the phase in the browser. Nothing committed.
+- **Deviations:** Two design calls made by the agent and reported to the
+  user: attempts refused *during* a lockout aren't recorded, so retrying
+  can't keep an account locked past 15 minutes (the PRD's limit); and the
+  15 minutes are a sliding window over the failures, so the pause can
+  lift a little sooner than 15 minutes after the 5th failure. The agent
+  pointed out that `/admin/` bypassed the lockout (the plan only named
+  `SignInForm`), and the user asked for it to be closed. The agent first
+  counted a customer's refused admin sign-in as a failure and
+  recommended keeping it that way; the user overrode that, asking for it
+  to be shown to the customer but not counted. Follow-up question: how
+  to check the phase manually in the browser (answered with a
+  step-by-step checklist using the seeded demo accounts; the 15-minute
+  expiry is covered only by the automated tests).
+- **Sideways:** The first `ruff format --check` flagged one over-long
+  line in a new test helper; it was wrapped by hand and re-checked
+  clean. As before, `uv run` printed the harmless `VIRTUAL_ENV`
+  mismatch warning.
+
 ## 2026-10-20 — Manually verify Phase 6 of the account security center (sign-in attempt history) and log the build session
 
 ### Prompts

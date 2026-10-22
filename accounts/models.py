@@ -153,6 +153,26 @@ class SignInAttemptQuerySet(models.QuerySet):
         """``user``'s attempts, newest first."""
         return self.filter(username=user.username.lower())
 
+    def is_locked_out(self, username: str) -> bool:
+        """True when ``username`` has ``LOCKOUT_THRESHOLD`` or more failed
+        sign-ins within ``LOCKOUT_WINDOW``.
+
+        Only failed sign-ins count (not refused admin sign-ins), and only
+        those after the latest clearing event — a successful sign-in or a
+        password reset, both recorded as succeeded. Works the same whether
+        or not the username exists.
+        """
+        attempts = self.filter(username=username.lower())
+        failures = attempts.filter(
+            succeeded=False,
+            kind=SignInAttempt.Kind.SIGN_IN,
+            created_at__gte=timezone.now() - SignInAttempt.LOCKOUT_WINDOW,
+        )
+        last_cleared = attempts.filter(succeeded=True).first()
+        if last_cleared:
+            failures = failures.filter(created_at__gt=last_cleared.created_at)
+        return failures.count() >= SignInAttempt.LOCKOUT_THRESHOLD
+
     def stale(self) -> "SignInAttemptQuerySet":
         """Attempts older than ``SignInAttempt.RETENTION`` — ready to prune."""
         return self.filter(created_at__lt=timezone.now() - SignInAttempt.RETENTION)
@@ -168,9 +188,15 @@ class SignInAttempt(models.Model):
     class Kind(models.TextChoices):
         SIGN_IN = "sign_in", "Sign-in"
         PASSWORD_RESET = "password_reset", "Password reset"
+        # The right password at /admin/ from a non-staff account: shown in
+        # recent activity, never counted toward the lockout.
+        ADMIN_DENIED = "admin_denied", "Admin sign-in refused"
 
     # How long attempts are kept; ``prune_signin_attempts`` deletes older ones.
     RETENTION = timedelta(days=90)
+    # Sign-in pauses for a username after this many failures in this window.
+    LOCKOUT_THRESHOLD = 5
+    LOCKOUT_WINDOW = timedelta(minutes=15)
 
     username = models.CharField(max_length=150, db_index=True)
     created_at = models.DateTimeField(default=timezone.now)
@@ -194,6 +220,8 @@ class SignInAttempt(models.Model):
         """How recent activity labels this attempt."""
         if self.kind == self.Kind.PASSWORD_RESET:
             return "Password reset"
+        if self.kind == self.Kind.ADMIN_DENIED:
+            return "Attempted admin sign-in"
         return "Signed in" if self.succeeded else "Failed sign-in"
 
 

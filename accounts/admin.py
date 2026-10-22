@@ -1,7 +1,11 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
+from .forms import AdminSignInForm
 from .models import Address, User
+
+# /admin/ gets the same sign-in lockout as the storefront.
+admin.site.login_form = AdminSignInForm
 
 
 @admin.register(User)

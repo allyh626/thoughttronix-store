@@ -849,3 +849,206 @@ def test_prune_deletes_attempts_older_than_90_days(db):
     assert not SignInAttempt.objects.filter(pk=old.pk).exists()
     assert SignInAttempt.objects.filter(pk=recent.pk).exists()
     assert "Deleted 1 old sign-in attempts." in out.getvalue()
+
+
+# --- Sign-in lockout ----------------------------------------------------------
+
+LOCKED_OUT = (
+    "Too many failed attempts — try again in a few minutes, or reset your password."
+)
+
+
+def fail(username, times=5, minutes_ago=1):
+    """Record ``times`` failed sign-ins for ``username``, ``minutes_ago``."""
+    when = timezone.now() - timedelta(minutes=minutes_ago)
+    for _ in range(times):
+        SignInAttempt.objects.create(
+            username=username, succeeded=False, created_at=when
+        )
+
+
+def sign_in_errors(response):
+    return response.context["form"].non_field_errors()
+
+
+def test_four_failures_still_allow_sign_in(client, customer):
+    for _ in range(4):
+        sign_in(client, "customer", "wrong")
+
+    response = sign_in(client, "customer", "customer123")
+
+    assert response.status_code == HTTPStatus.FOUND
+
+
+def test_the_fifth_failure_locks_out_even_the_right_password(client, customer):
+    for _ in range(5):
+        sign_in(client, "customer", "wrong")
+
+    response = sign_in(client, "customer", "customer123")
+
+    assert response.status_code == HTTPStatus.OK
+    assert sign_in_errors(response) == [LOCKED_OUT]
+    assert not response.wsgi_request.user.is_authenticated
+
+
+def test_the_lockout_message_is_shown_on_the_page(client, customer):
+    fail("customer")
+
+    response = sign_in(client, "customer", "customer123")
+
+    assert "Too many failed attempts" in response.content.decode()
+
+
+def test_the_lockout_ignores_capitalization(client, customer):
+    fail("customer")
+
+    response = sign_in(client, "CUSTOMER", "customer123")
+
+    assert sign_in_errors(response) == [LOCKED_OUT]
+
+
+def test_unknown_usernames_lock_out_identically(client, customer):
+    for _ in range(5):
+        sign_in(client, "nobody", "wrong")
+        sign_in(client, "customer", "wrong")
+
+    unknown = sign_in(client, "nobody", "whatever")
+    known = sign_in(client, "customer", "whatever")
+
+    assert sign_in_errors(unknown) == sign_in_errors(known) == [LOCKED_OUT]
+
+
+def test_failures_older_than_15_minutes_dont_count(client, customer):
+    fail("customer", times=4, minutes_ago=16)
+    fail("customer", times=4, minutes_ago=1)
+
+    response = sign_in(client, "customer", "customer123")
+
+    assert response.status_code == HTTPStatus.FOUND
+
+
+def test_the_pause_lifts_once_the_failures_are_15_minutes_old(client, customer):
+    fail("customer", minutes_ago=16)
+
+    response = sign_in(client, "customer", "customer123")
+
+    assert response.status_code == HTTPStatus.FOUND
+
+
+def test_sign_ins_refused_while_locked_are_not_recorded(client, customer):
+    fail("customer")
+
+    sign_in(client, "customer", "wrong")
+    sign_in(client, "customer", "customer123")
+
+    assert SignInAttempt.objects.count() == 5
+
+
+def test_a_successful_sign_in_clears_the_count(client, customer):
+    fail("customer", times=4, minutes_ago=2)
+    sign_in(client, "customer", "customer123")
+    client.logout()
+
+    sign_in(client, "customer", "wrong")
+    response = sign_in(client, "customer", "customer123")
+
+    assert response.status_code == HTTPStatus.FOUND
+
+
+def test_a_password_reset_clears_the_lockout(client, verified, mailoutbox):
+    fail("customer")
+    request_reset(client, "old@example.com")
+    reset_password(client, mailoutbox[0])
+
+    response = sign_in(client, "customer", NEW_PASSWORD)
+
+    assert response.status_code == HTTPStatus.FOUND
+
+
+def test_staff_accounts_are_locked_out_too(client, staff_user):
+    fail("employee")
+
+    response = sign_in(client, "employee", "employee123")
+
+    assert sign_in_errors(response) == [LOCKED_OUT]
+
+
+def test_superuser_accounts_are_locked_out_too(client, db):
+    get_user_model().objects.create_superuser(username="admin", password="admin123")
+    fail("admin")
+
+    response = sign_in(client, "admin", "admin123")
+
+    assert sign_in_errors(response) == [LOCKED_OUT]
+
+
+# --- The Django admin's login -------------------------------------------------
+
+
+@pytest.fixture
+def superuser(db):
+    return get_user_model().objects.create_superuser(
+        username="admin", password="admin123"
+    )
+
+
+def admin_sign_in(client, username, password):
+    return client.post(
+        reverse("admin:login"), {"username": username, "password": password}
+    )
+
+
+def test_admin_sign_in_still_works(client, superuser):
+    response = admin_sign_in(client, "admin", "admin123")
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert attempts() == [("admin", True, "sign_in")]
+
+
+def test_admin_failures_count_toward_the_lockout(client, superuser):
+    for _ in range(5):
+        admin_sign_in(client, "admin", "wrong")
+
+    response = sign_in(client, "admin", "admin123")
+
+    assert sign_in_errors(response) == [LOCKED_OUT]
+
+
+def test_a_locked_out_superuser_is_refused_at_the_admin(client, superuser):
+    fail("admin")
+
+    response = admin_sign_in(client, "admin", "admin123")
+
+    assert sign_in_errors(response) == [LOCKED_OUT]
+    assert not response.wsgi_request.user.is_authenticated
+
+
+def test_the_admin_still_turns_customers_away(client, customer):
+    response = admin_sign_in(client, "customer", "customer123")
+
+    assert "for a staff account" in " ".join(sign_in_errors(response))
+    assert attempts() == [("customer", False, "admin_denied")]
+
+
+def test_a_wrong_password_at_the_admin_is_an_ordinary_failure(client, customer):
+    admin_sign_in(client, "customer", "wrong")
+
+    assert attempts() == [("customer", False, "sign_in")]
+
+
+def test_refused_admin_sign_ins_dont_lock_a_customer_out(client, customer):
+    for _ in range(5):
+        admin_sign_in(client, "customer", "customer123")
+
+    response = sign_in(client, "customer", "customer123")
+
+    assert response.status_code == HTTPStatus.FOUND
+
+
+def test_my_account_labels_a_refused_admin_sign_in(client, customer):
+    admin_sign_in(client, "customer", "customer123")
+    client.force_login(customer)
+
+    page = client.get(reverse("accounts:account")).content.decode()
+
+    assert "Attempted admin sign-in" in page

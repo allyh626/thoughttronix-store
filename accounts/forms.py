@@ -1,4 +1,5 @@
 from django import forms
+from django.contrib.admin.forms import AdminAuthenticationForm
 from django.contrib.auth.forms import (
     AuthenticationForm,
     PasswordChangeForm,
@@ -116,8 +117,18 @@ class SignInForm(AuthenticationForm):
 
     Every real attempt — a username and password both given — is recorded
     as a ``SignInAttempt``, succeeded or failed, whether or not the
-    username exists.
+    username exists. A locked-out username is refused before the password
+    is checked, and that refusal isn't recorded, so retrying while paused
+    never extends the pause.
     """
+
+    error_messages = {
+        **AuthenticationForm.error_messages,
+        "locked_out": (
+            "Too many failed attempts — try again in a few minutes, "
+            "or reset your password."
+        ),
+    }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -128,13 +139,45 @@ class SignInForm(AuthenticationForm):
         username = self.cleaned_data.get("username")
         if not (username and self.cleaned_data.get("password")):
             return super().clean()
+        if SignInAttempt.objects.is_locked_out(username):
+            raise forms.ValidationError(
+                self.error_messages["locked_out"], code="locked_out"
+            )
         try:
             cleaned_data = super().clean()
         except forms.ValidationError:
-            SignInAttempt.objects.record(username, succeeded=False)
+            # ``user_cache`` is set only when the password matched; a match
+            # refused by ``confirm_login_allowed`` is recorded there instead.
+            if self.user_cache is None:
+                SignInAttempt.objects.record(username, succeeded=False)
             raise
         SignInAttempt.objects.record(username, succeeded=True)
         return cleaned_data
+
+
+class AdminSignInForm(SignInForm, AdminAuthenticationForm):
+    """The Django admin's login form with the same lockout and recording as
+    the storefront's, so ``/admin/`` is no back door for guessing.
+
+    ``SignInForm.clean`` runs first; its ``super().clean()`` then reaches the
+    admin form's staff-only rule. A customer's right password refused by that
+    rule is recorded as an admin sign-in refused, which shows in their
+    recent activity but never counts toward the lockout.
+    """
+
+    error_messages = {
+        **AdminAuthenticationForm.error_messages,
+        "locked_out": SignInForm.error_messages["locked_out"],
+    }
+
+    def confirm_login_allowed(self, user):
+        try:
+            super().confirm_login_allowed(user)
+        except forms.ValidationError:
+            SignInAttempt.objects.record(
+                user.username, succeeded=False, kind=SignInAttempt.Kind.ADMIN_DENIED
+            )
+            raise
 
 
 class AddressForm(forms.ModelForm):

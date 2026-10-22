@@ -219,15 +219,15 @@ and the rule applies to staff and admins too.
 
 ### Acceptance criteria
 
-- [ ] The 5th failure within 15 minutes locks the username, and a correct
+- [x] The 5th failure within 15 minutes locks the username, and a correct
       password is still refused
-- [ ] The message reads "too many failed attempts — try again in a few
+- [x] The message reads "too many failed attempts — try again in a few
       minutes, or reset your password."
-- [ ] Unknown usernames lock out identically
-- [ ] Failures older than 15 minutes don't count
-- [ ] A successful sign-in or password reset clears the count
-- [ ] Staff and superuser accounts are protected the same way
-- [ ] Tests cover each rule above
+- [x] Unknown usernames lock out identically
+- [x] Failures older than 15 minutes don't count
+- [x] A successful sign-in or password reset clears the count
+- [x] Staff and superuser accounts are protected the same way
+- [x] Tests cover each rule above
 
 ---
 
