@@ -1,6 +1,6 @@
 # CLAUDE.md — The ThoughtTronix Store
 
-A server-rendered Django 6 storefront and back office. The PRD (`prd/core-platform.md`) and the plan (`plans/core-platform.md`) record how the core platform was designed and built.
+A server-rendered Django 6 storefront and back office. The PRD (`prd/core-platform.md`) and the plan (`plans/core-platform.md`) record how the core platform was designed and built; `prd/account-security-center.md` and `plans/account-security-center.md` do the same for the Account Security Center.
 
 ## Commands
 
@@ -8,6 +8,8 @@ A server-rendered Django 6 storefront and back office. The PRD (`prd/core-platfo
 - `uv run python manage.py migrate` — apply migrations
 - `uv run python manage.py seed` — reset the database to the demo world
   (destructive, idempotent)
+- `uv run python manage.py prune_signin_attempts` — delete sign-in attempts
+  older than 90 days (safe to run any time)
 - `uv run python manage.py tailwind runserver` — dev server + Tailwind watch
 - `uv run python manage.py tailwind build` — compile production CSS
 - `uv run pytest` — run the test suite
@@ -22,11 +24,18 @@ A server-rendered Django 6 storefront and back office. The PRD (`prd/core-platfo
   mixed into `get_session_auth_hash` so changing it signs out every other
   session). Roles are Django's own vocabulary: customers are plain users,
   employees are `is_staff`, the admin is `is_superuser`. No role field, no Groups.
+  Back-office views gate on `is_staff` with `StaffRequiredMixin`
+  (`accounts/mixins.py`): anonymous users go to login, non-staff get 403.
   Also owns `Address` (the customer address book, with default
   shipping/billing flags), the My account page, and `accounts/validators.py`
   (`US_STATES`, `zip_validator` — shared with checkout).
+  Also owns `SignInAttempt` (sign-in history and the 5-failures-in-15-minutes lockout).
+  Account security flows (`accounts/urls.py`): signup, sign-in/out, email
+  verification and change, password change and reset, sign out other
+  devices, and delete account.
 - `products/` — catalog (`Category`, `Product`, `Tag`), its back-office CRUD,
-  and the `seed` command
+  and the `seed` command. Product images live in `media/` (gitignored, wiped
+  by `seed`); `products/validators.py` is the single rule for a valid image.
 - `orders/` — cart, checkout, orders, back-office order management, and
   discount codes (`Coupon`, the back-office Coupons tab). Orders copy a
   coupon's code and savings on; `Order.total` is what the customer paid.

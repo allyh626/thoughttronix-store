@@ -1,0 +1,24 @@
+{# The wishlist button, in all its states. Whether the product is saved #}
+{# comes from the wishlist context processor, which runs at render time, #}
+{# so an HTMX response always shows the state after the change. #}
+{% if not user.is_authenticated %}
+  {# Anonymous visitors are prompted to sign in — a plain link, no HTMX. #}
+  <a href="{% url 'accounts:login' %}?next={{ request.get_full_path|urlencode }}"
+     class="btn btn-outline btn-sm">
+    Add to wishlist
+  </a>
+{% elif product.pk in wishlist_product_ids %}
+  <button
+    hx-post="{% url 'wishlist:remove' product.pk %}"
+    hx-swap="outerHTML"
+    class="btn btn-secondary btn-sm">
+    In wishlist (remove)
+  </button>
+{% else %}
+  <button
+    hx-post="{% url 'wishlist:add' product.pk %}"
+    hx-swap="outerHTML"
+    class="btn btn-outline btn-sm">
+    Add to wishlist
+  </button>
+{% endif %}
