@@ -1,6 +1,7 @@
 # CLAUDE.md — The ThoughtTronix Store
 
-A server-rendered Django 6 storefront and back office. The PRD (`prd/core-platform.md`) and the plan (`plans/core-platform.md`) record how the core platform was designed and built; `prd/account-security-center.md` and `plans/account-security-center.md` do the same for the Account Security Center.
+A server-rendered Django 6 storefront and back office. The PRD (`prd/core-platform.md`) and the plan (`plans/core-platform.md`) record how the core platform was designed and built; `prd/account-security-center.md` and `plans/account-security-center.md` do the same for the Account Security Center,
+and `prd/wishlist.md` and `plans/wishlist.md` for the customer wishlist.
 
 ## Commands
 
@@ -39,6 +40,11 @@ A server-rendered Django 6 storefront and back office. The PRD (`prd/core-platfo
 - `orders/` — cart, checkout, orders, back-office order management, and
   discount codes (`Coupon`, the back-office Coupons tab). Orders copy a
   coupon's code and savings on; `Order.total` is what the customer paid.
+- `wishlist/` — the customer wishlist (`Wishlist`, one per user, created
+  lazily by `for_user`; `WishlistItem`, newest first). Mirrors the cart:
+  HTMX add/remove button on the product detail page, an out-of-band navbar
+  count badge fed by the `wishlist` context processor, and the My wishlist
+  page. Every view reaches data only through `request.user`'s wishlist.
 - `dashboard/` — the staff analytics dashboard
 - `PROMPTS.md` — the AI-usage log; append entries, never rewrite history
 - `templates/` — project-level templates (`base.html`); app templates live in

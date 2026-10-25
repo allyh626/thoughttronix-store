@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils.html import escape
 
 from orders.models import CartItem, Order, OrderItem
+from wishlist.models import Wishlist, WishlistItem
 
 from .models import Category, Product, Tag
 
@@ -232,6 +233,14 @@ def test_seed_builds_the_demo_world(db, media_root):
     assert not customer.is_staff
     assert customer.cart.item_count() == 4
     assert customer.orders.count() == 4
+    saved = list(customer.wishlist.items.all())
+    assert [item.product.slug for item in saved] == [
+        "mindsync-duo",
+        "echopatch",
+        "recallpro",
+        "pulse-halo",
+    ]
+    assert any(not item.product.is_available for item in saved)
     assert [a.label for a in customer.addresses.all()] == ["Home", "Work"]
     assert customer.addresses.default_for("shipping").label == "Home"
     assert customer.addresses.default_for("billing").label == "Home"
@@ -257,6 +266,7 @@ def test_seed_is_idempotent(db, media_root):
         CartItem.objects.count(),
         Order.objects.count(),
         OrderItem.objects.count(),
+        WishlistItem.objects.count(),
     )
 
     call_command("seed")
@@ -268,6 +278,18 @@ def test_seed_is_idempotent(db, media_root):
         CartItem.objects.count(),
         Order.objects.count(),
         OrderItem.objects.count(),
+        WishlistItem.objects.count(),
     )
 
     assert first == second
+
+
+def test_seed_resets_every_wishlist(db, media_root, other_customer):
+    call_command("seed")
+    wishlist = Wishlist.for_user(other_customer)
+    wishlist.add(Product.objects.get(slug="veil"))
+
+    call_command("seed")
+
+    assert not Wishlist.objects.filter(user=other_customer).exists()
+    assert Wishlist.objects.count() == 1  # only the demo customer's

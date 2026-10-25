@@ -9,7 +9,7 @@ Demo logins (documented in the README):
     admin / admin123        superuser
     employee / employee123  staff, "Junior Thought Curator"
     customer / customer123  a plain customer, with order history, a live cart,
-                            and two saved addresses
+                            a four-item wishlist, and two saved addresses
 """
 
 import random
@@ -31,6 +31,7 @@ from accounts.models import Address, SignInAttempt
 from orders.models import Cart, Coupon, Order, OrderItem
 from products.models import Category, Product, Tag
 from products.validators import validate_product_image
+from wishlist.models import Wishlist
 
 # Product photos, one per slug (products/seed_images/<slug>.png). A product
 # without one keeps its category placeholder.
@@ -482,6 +483,15 @@ CUSTOMER_CART = [
     ("whisper-alarm-clock", 1),
 ]
 
+# The customer demo login's wishlist: (product slug, days since saved).
+# Staggered so the newest-first order shows; EchoPatch is unavailable.
+CUSTOMER_WISHLIST = [
+    ("mindsync-duo", 3),
+    ("echopatch", 12),
+    ("recallpro", 25),
+    ("pulse-halo", 40),
+]
+
 # The customer demo login's visible order history: (days ago, status,
 # [(product slug, quantity), ...]). Statuses follow age, like the
 # background orders, plus one recent order still in flight.
@@ -546,6 +556,7 @@ class Command(BaseCommand):
         self._create_catalog(tags)
         self._create_users()
         self._create_customer_cart()
+        self._create_customer_wishlist()
         self._create_customer_addresses()
         self._create_orders()
         self._create_coupons()
@@ -558,8 +569,8 @@ class Command(BaseCommand):
                 f"{get_user_model().objects.count()} users, "
                 f"{Order.objects.count()} orders, "
                 f"{Coupon.objects.count()} coupons, "
-                f"and a live cart and {Address.objects.count()} saved addresses "
-                f"for 'customer'."
+                f"and a live cart, {len(CUSTOMER_WISHLIST)} wishlist items, "
+                f"and {Address.objects.count()} saved addresses for 'customer'."
             )
         )
 
@@ -568,6 +579,7 @@ class Command(BaseCommand):
         Order.objects.all().delete()
         Coupon.objects.all().delete()  # after orders: Order.coupon is PROTECT
         Cart.objects.all().delete()
+        Wishlist.objects.all().delete()
         Product.objects.all().delete()
         Tag.objects.all().delete()
         Category.objects.all().delete()
@@ -652,6 +664,17 @@ class Command(BaseCommand):
         cart = Cart.for_user(customer)
         for slug, quantity in CUSTOMER_CART:
             cart.items.create(product=Product.objects.get(slug=slug), quantity=quantity)
+
+    def _create_customer_wishlist(self):
+        """Saved products, backdated so each row shows a different saved date."""
+        customer = get_user_model().objects.get(username="customer")
+        wishlist = Wishlist.for_user(customer)
+        now = timezone.now()
+        for slug, days_ago in CUSTOMER_WISHLIST:
+            item = wishlist.add(Product.objects.get(slug=slug))
+            wishlist.items.filter(pk=item.pk).update(
+                added_at=now - timedelta(days=days_ago)
+            )
 
     def _create_customer_addresses(self):
         """'Home' is the default for both kinds; 'Work' is not a default.

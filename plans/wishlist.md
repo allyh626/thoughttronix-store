@@ -199,11 +199,11 @@ as a reviewer signs in.
 
 ### Acceptance criteria
 
-- [ ] `seed` deletes all wishlists during its reset
-- [ ] The demo customer gets three or four wishlist items, including at
+- [x] `seed` deletes all wishlists during its reset
+- [x] The demo customer gets three or four wishlist items, including at
       least one unavailable product
-- [ ] The seed summary output reports the wishlist
-- [ ] Running `seed` twice gives the same result (idempotent)
-- [ ] CLAUDE.md's project layout gains a `wishlist/` entry, and the
+- [x] The seed summary output reports the wishlist
+- [x] Running `seed` twice gives the same result (idempotent)
+- [x] CLAUDE.md's project layout gains a `wishlist/` entry, and the
       wishlist PRD and plan pair are listed alongside the others
-- [ ] Tests cover the reset and the seeded items
+- [x] Tests cover the reset and the seeded items

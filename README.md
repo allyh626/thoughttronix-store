@@ -30,7 +30,7 @@ The `seed` command creates a fixed demo world — the same one every run:
 | ---------- | ------------- | ------------------------------------------------------------- |
 | `admin`    | `admin123`    | Superuser: everything below, plus the Django admin at `/admin/` |
 | `employee` | `employee123` | Staff: the back office (products, orders, dashboard)           |
-| `customer` | `customer123` | A customer with order history, a live cart, and saved addresses |
+| `customer` | `customer123` | A customer with order history, a live cart, a wishlist, and saved addresses |
 
 ## Commands
 

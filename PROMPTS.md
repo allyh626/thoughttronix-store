@@ -28,6 +28,38 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-25 — Build Phase 6 of the wishlist (seed the demo wishlist)
+
+### Prompts
+1. /implement @prd/wishlist.md @plans/wishlist.md implement phase 6
+2. okay i guess I didn't realize i should have combined this phase and
+   completed it earlier on, this plan is acceptable
+
+### Summary
+- **Outcome:** Built Phase 6 of `plans/wishlist.md`, completing the
+  wishlist feature:
+  - `seed` wipes every wishlist in `_wipe()` (beside the carts), so even
+    non-demo accounts' wishlists are cleared, not just the cascaded ones.
+  - New `CUSTOMER_WISHLIST` constant and `_create_customer_wishlist()`:
+    the `customer` demo login saves MindSync Duo, EchoPatch (unavailable),
+    RecallPro, and Pulse Halo through `Wishlist.for_user` / `add`, then
+    each `added_at` is backdated (3, 12, 25, 40 days) so the My wishlist
+    page shows distinct dates in newest-first order.
+  - The summary line reports "4 wishlist items"; the seed docstring,
+    README demo-login table, and CLAUDE.md (new `wishlist/` layout entry,
+    wishlist PRD/plan pair listed) were updated.
+  - Tests: the demo-world test checks the four slugs in order and an
+    unavailable item; the idempotence test compares `WishlistItem`
+    counts; new `test_seed_resets_every_wishlist` covers a non-demo
+    user's wishlist. Suite at 462 passed; ruff check and format clean;
+    `seed` run twice by hand gave identical output.
+- **Deviations:** No TDD behaviors — the phase is seed data and docs, which
+  the TDD skill excludes; the user approved the plan and the four
+  products as proposed. The user wondered whether this phase should have
+  been folded into an earlier one; kept separate so seed changes only
+  after the feature works.
+- **Sideways:** None.
+
 ## 2026-10-25 — Build Phase 5 of the wishlist (live navbar count badge)
 
 ### Prompts
