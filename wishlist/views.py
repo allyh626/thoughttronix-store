@@ -6,8 +6,9 @@ partial (never ``base.html``); the wishlist context processor runs at
 render time, so the partial always shows the state after the change.
 """
 
+from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 from django.views.generic import ListView
 
@@ -44,11 +45,19 @@ class AddToWishlistView(LoginRequiredMixin, View):
 
 
 class RemoveFromWishlistView(LoginRequiredMixin, View):
-    """HTMX: unsave a product; the button swaps back to its unsaved state."""
+    """Unsave a product, for two callers.
+
+    HTMX (the detail page): the button swaps back to its unsaved state.
+    A plain form post (the My wishlist page): redirect back to the list
+    with a success message.
+    """
 
     def post(self, request, pk):
         product = get_object_or_404(Product, pk=pk)
         Wishlist.for_user(request.user).remove(product)
+        if not request.headers.get("HX-Request"):
+            messages.success(request, f"Removed {product} from your wishlist.")
+            return redirect("wishlist:list")
         return render(
             request, "wishlist/partials/_wishlist_button.html", {"product": product}
         )

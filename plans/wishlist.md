@@ -58,24 +58,24 @@ the Django admin.
 
 ### Acceptance criteria
 
-- [ ] The `wishlist` app is created, installed, and its URLs are included
+- [x] The `wishlist` app is created, installed, and its URLs are included
       under the `wishlist` namespace
-- [ ] `Wishlist` and `WishlistItem` models and their migration exist as
+- [x] `Wishlist` and `WishlistItem` models and their migration exist as
       described in the architectural decisions
-- [ ] `Wishlist.for_user` creates the wishlist on first touch, and
+- [x] `Wishlist.for_user` creates the wishlist on first touch, and
       `Wishlist.add` is idempotent (adding twice leaves one item)
-- [ ] `wishlist:add` is POST only, requires sign-in, works for unavailable
+- [x] `wishlist:add` is POST only, requires sign-in, works for unavailable
       products, and returns the button partial in its saved state
-- [ ] The detail page shows "Add to wishlist" or "In wishlist (remove)" based
+- [x] The detail page shows "Add to wishlist" or "In wishlist (remove)" based
       on the saved product ids from the `wishlist` context processor
       (anonymous requests get an empty set)
-- [ ] Signed-out visitors see a sign-in link with `?next=` back to the
+- [x] Signed-out visitors see a sign-in link with `?next=` back to the
       product, with no HTMX
-- [ ] Deleting a user deletes their wishlist, and deleting a product deletes
+- [x] Deleting a user deletes their wishlist, and deleting a product deletes
       its wishlist items
-- [ ] `Wishlist` is registered in the Django admin with `WishlistItem` as a
+- [x] `Wishlist` is registered in the Django admin with `WishlistItem` as a
       tabular inline, mirroring `CartAdmin`
-- [ ] Tests cover the model methods, the add endpoint (signed in,
+- [x] Tests cover the model methods, the add endpoint (signed in,
       anonymous redirect, GET rejected, unavailable product, idempotent
       repeat, only touches the signed-in user's wishlist), the button states
       on the detail page, and both cascades
@@ -93,13 +93,13 @@ product and the button swaps back to "Add to wishlist" without a reload.
 
 ### Acceptance criteria
 
-- [ ] `Wishlist.remove` is idempotent (removing an unsaved product does no
+- [x] `Wishlist.remove` is idempotent (removing an unsaved product does no
       harm)
-- [ ] `wishlist:remove` is POST only, requires sign-in, and for an HTMX
+- [x] `wishlist:remove` is POST only, requires sign-in, and for an HTMX
       request returns the button partial in its unsaved state
-- [ ] The saved-state button posts to `wishlist:remove`
-- [ ] Removing only ever affects the signed-in user's wishlist
-- [ ] Tests cover the model method, the HTMX remove (signed in, anonymous
+- [x] The saved-state button posts to `wishlist:remove`
+- [x] Removing only ever affects the signed-in user's wishlist
+- [x] Tests cover the model method, the HTMX remove (signed in, anonymous
       redirect, GET rejected, idempotent repeat), and that another
       customer's wishlist is untouched
 
@@ -120,16 +120,16 @@ to the catalog. The navbar link has no count yet.
 
 ### Acceptance criteria
 
-- [ ] `wishlist:list` requires sign-in and shows only the signed-in user's
+- [x] `wishlist:list` requires sign-in and shows only the signed-in user's
       items
-- [ ] The page extends `base.html` and opens with a text-3xl font-bold h1
+- [x] The page extends `base.html` and opens with a text-3xl font-bold h1
       and a one-line opacity-70 description
-- [ ] Rows are ordered newest saved first and show image, linked name,
+- [x] Rows are ordered newest saved first and show image, linked name,
       price, saved date, and the "Unavailable" badge for unavailable
       products
-- [ ] An empty wishlist shows a designed empty state linking to the catalog
-- [ ] The navbar shows a "Wishlist" link for signed-in users only
-- [ ] Tests cover anonymous redirect, ordering, row contents, the
+- [x] An empty wishlist shows a designed empty state linking to the catalog
+- [x] The navbar shows a "Wishlist" link for signed-in users only
+- [x] Tests cover anonymous redirect, ordering, row contents, the
       unavailable badge, the empty state, that another customer's items
       never appear, and the navbar link
 
@@ -149,14 +149,14 @@ message: "Removed <product> from your wishlist."
 
 ### Acceptance criteria
 
-- [ ] Each row includes the existing add-to-cart partial, with its disabled
+- [x] Each row includes the existing add-to-cart partial, with its disabled
       state for unavailable products
-- [ ] Adding to the cart does not remove the product from the wishlist
-- [ ] Each row has a Remove form (POST with CSRF) targeting `wishlist:remove`
-- [ ] A non-HTMX remove redirects to `wishlist:list` with the success
+- [x] Adding to the cart does not remove the product from the wishlist
+- [x] Each row has a Remove form (POST with CSRF) targeting `wishlist:remove`
+- [x] A non-HTMX remove redirects to `wishlist:list` with the success
       message
-- [ ] Removing the last item shows the empty state
-- [ ] Tests cover the redirect and message, the non-HTMX vs HTMX response
+- [x] Removing the last item shows the empty state
+- [x] Tests cover the redirect and message, the non-HTMX vs HTMX response
       difference, the add-to-cart button's presence, and that the item
       survives an add to cart
 

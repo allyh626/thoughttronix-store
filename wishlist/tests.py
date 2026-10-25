@@ -3,6 +3,7 @@ from http import HTTPStatus
 
 import pytest
 from django.contrib import admin
+from django.contrib.messages import get_messages
 from django.db import IntegrityError
 from django.urls import reverse
 
@@ -215,6 +216,22 @@ def test_remove_only_touches_your_own_wishlist(
     assert other_wishlist.items.get().product == product
 
 
+def test_plain_remove_redirects_to_list_with_message(
+    client, customer, wishlist, product
+):
+    wishlist.add(product)
+    client.force_login(customer)
+
+    response = client.post(reverse("wishlist:remove", kwargs={"pk": product.pk}))
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.url == reverse("wishlist:list")
+    assert [str(m) for m in get_messages(response.wsgi_request)] == [
+        "Removed Seraphine Home Hub from your wishlist."
+    ]
+    assert not wishlist.items.exists()
+
+
 # --- The detail page button --------------------------------------------------
 
 
@@ -337,6 +354,51 @@ def test_list_does_not_badge_available_products(client, customer, wishlist, prod
     response = client.get(reverse("wishlist:list"))
 
     assert "Unavailable" not in response.content.decode()
+
+
+def test_list_rows_offer_add_to_cart_and_remove(
+    client, customer, wishlist, product, unavailable_product
+):
+    wishlist.add(product)
+    wishlist.add(unavailable_product)
+    client.force_login(customer)
+
+    response = client.get(reverse("wishlist:list"))
+
+    page = response.content.decode()
+    assert reverse("orders:add", kwargs={"pk": product.pk}) in page
+    assert "disabled>Unavailable</button>" in page
+    for saved in (product, unavailable_product):
+        remove_url = reverse("wishlist:remove", kwargs={"pk": saved.pk})
+        assert f'action="{remove_url}"' in page
+
+
+def test_item_stays_saved_after_add_to_cart(client, customer, wishlist, product):
+    wishlist.add(product)
+    client.force_login(customer)
+
+    client.post(
+        reverse("orders:add", kwargs={"pk": product.pk}),
+        headers={"HX-Request": "true"},
+    )
+
+    assert customer.cart.items.get().product == product
+    assert wishlist.items.get().product == product
+
+
+def test_removing_the_last_item_shows_the_empty_state(
+    client, customer, wishlist, product
+):
+    wishlist.add(product)
+    client.force_login(customer)
+
+    response = client.post(
+        reverse("wishlist:remove", kwargs={"pk": product.pk}), follow=True
+    )
+
+    page = response.content.decode()
+    assert "Removed Seraphine Home Hub from your wishlist." in page
+    assert "Your wishlist is empty" in page
 
 
 def test_empty_list_shows_empty_state(client, customer):

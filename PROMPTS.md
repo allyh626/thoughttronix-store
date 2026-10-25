@@ -28,6 +28,47 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-25 — Build Phase 4 of the wishlist (act on items from My wishlist)
+
+### Prompts
+1. /implement @prd/wishlist.md @plans/wishlist.md implement phase 4
+2. yes you can use tdd for those two behaviors
+3. yes, make it pass
+4. yes you can move onto behavior two
+5. yes, make it pass
+6. yes, continue with the rest of the phase
+
+### Summary
+- **Outcome:** Built Phase 4 of `plans/wishlist.md`:
+  - `RemoveFromWishlistView` now serves two callers. With the
+    `HX-Request` header (the detail page) it still returns the button
+    partial; without it (a plain form post from My wishlist) it flashes
+    "Removed <product> from your wishlist." and redirects to
+    `wishlist:list`.
+  - `templates/wishlist/wishlist.html` gained an Actions column: the
+    existing `orders/partials/_add_button.html` included as-is (HTMX add,
+    "In cart (N)", disabled "Unavailable", cart badge update) and a plain
+    POST Remove form with `{% csrf_token %}`.
+  - TDD on two approved behaviors: the plain remove's redirect and
+    message (RED on `200 == 302`), and the row's add-to-cart button and
+    Remove form (RED on the missing `/cart/add/1/`). Two more ordinary
+    tests: the item stays saved after an add to cart, and removing the
+    last item (following the redirect) shows the message and the empty
+    state. Suite at 459 passed; ruff check and format clean. Phase 4
+    boxes ticked in the plan, along with the Phase 1–3 ticks that were
+    still uncommitted.
+- **Deviations:** None — both proposed TDD behaviors were approved as
+  listed, and every step took the suggested next action.
+- **Sideways:** Nothing failed outside the planned RED runs. The CSRF
+  token on the Remove form isn't asserted in tests, because `base.html`
+  already prints one for sign-out (the assertion would always pass), so
+  it is left to the browser check. Known edge left in place: a signed-out
+  Remove would land on the remove URL as a GET (405) after sign-in, the
+  same as add; it can't be reached from the UI, which requires sign-in.
+  No live browser run in this session; the HTMX add from the wishlist
+  page is verified through server responses only. `uv run` printed the
+  usual harmless `VIRTUAL_ENV` mismatch warning.
+
 ## 2026-10-25 — Build Phase 3 of the wishlist (My wishlist page)
 
 ### Prompts
