@@ -2,8 +2,9 @@
 
 Every view reaches data only through the signed-in user's own wishlist,
 never by a bare wishlist or item id. HTMX endpoints render the button
-partial (never ``base.html``); the wishlist context processor runs at
-render time, so the partial always shows the state after the change.
+partial (never ``base.html``) with the navbar badge as an out-of-band
+swap via the ``oob_badge`` context flag; the wishlist context processor
+runs at render time, so both always show the state after the change.
 """
 
 from django.contrib import messages
@@ -40,7 +41,9 @@ class AddToWishlistView(LoginRequiredMixin, View):
         product = get_object_or_404(Product, pk=pk)
         Wishlist.for_user(request.user).add(product)
         return render(
-            request, "wishlist/partials/_wishlist_button.html", {"product": product}
+            request,
+            "wishlist/partials/_wishlist_button.html",
+            {"product": product, "oob_badge": True},
         )
 
 
@@ -59,5 +62,7 @@ class RemoveFromWishlistView(LoginRequiredMixin, View):
             messages.success(request, f"Removed {product} from your wishlist.")
             return redirect("wishlist:list")
         return render(
-            request, "wishlist/partials/_wishlist_button.html", {"product": product}
+            request,
+            "wishlist/partials/_wishlist_button.html",
+            {"product": product, "oob_badge": True},
         )

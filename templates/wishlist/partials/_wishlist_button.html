@@ -1,6 +1,7 @@
 {# The wishlist button, in all its states. Whether the product is saved #}
 {# comes from the wishlist context processor, which runs at render time, #}
-{# so an HTMX response always shows the state after the change. #}
+{# so an HTMX response always shows the state after the change. HTMX #}
+{# responses pass oob_badge to also swap the navbar badge out-of-band. #}
 {% if not user.is_authenticated %}
   {# Anonymous visitors are prompted to sign in — a plain link, no HTMX. #}
   <a href="{% url 'accounts:login' %}?next={{ request.get_full_path|urlencode }}"
@@ -22,3 +23,4 @@
     Add to wishlist
   </button>
 {% endif %}
+{% if oob_badge %}{% include "wishlist/partials/_wishlist_badge.html" with oob=True %}{% endif %}

@@ -28,6 +28,52 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-25 — Build Phase 5 of the wishlist (live navbar count badge)
+
+### Prompts
+1. /implement @prd/wishlist.md @plans/wishlist.md implement phase 5
+2. can option 2 be verified manually from the broswer? im not sure how id check that
+3. yes, use tdd for both behaviors
+4. yes, make it pass
+5. yes you can now implement behavior 2
+6. yes, make it pass
+7. yes you can complete the phase
+
+### Summary
+- **Outcome:** Built Phase 5 of `plans/wishlist.md`, following the cart
+  badge:
+  - The `wishlist` context processor also returns `wishlist_item_count`
+    (`len` of the saved-id set it already loads, so still one query; `0`
+    for anonymous requests).
+  - New `templates/wishlist/partials/_wishlist_badge.html` (stable
+    `id="wishlist-badge"`, `oob` flag, count shown only above zero),
+    included in the navbar in place of the plain Wishlist link.
+  - `wishlist:add` and the HTMX branch of `wishlist:remove` pass
+    `oob_badge: True`, and `_wishlist_button.html` then includes the
+    badge with `hx-swap-oob="true"`. The plain-form remove still
+    redirects before reaching that code.
+  - TDD on two approved behaviors: the navbar count (no number when
+    empty, `2` after saving two) and the out-of-band badge in both HTMX
+    responses (`1` after add, no number after remove). A small
+    `_wishlist_badge` test helper cuts the link out of the page so the
+    cart badge can't satisfy the assertions. Suite at 461 passed; ruff
+    check clean.
+- **Deviations:** Follow-up question before approving the TDD list: whether
+  the out-of-band swap can be checked in the browser. Answered: watch
+  the navbar count change without a reload, or open DevTools → Network,
+  click the button, and read the response for the
+  `id="wishlist-badge" ... hx-swap-oob="true"` link. Both behaviors were
+  then approved as listed.
+- **Sideways:** Both first test runs failed with `ValueError: substring
+  not found` instead of an assertion. Behavior 1 needed the badge
+  partial's id in place first (scaffolding, then a real RED on the
+  missing `2`). Behavior 2 got a mechanical test repair, an explicit
+  `id="wishlist-badge"` check before the helper, which gave a real RED
+  without changing what it asserts. `ruff format` re-wrapped one line
+  of the new tests. No live browser run in this session; the swap is
+  verified through server responses only. `uv run` printed the usual
+  harmless `VIRTUAL_ENV` mismatch warning.
+
 ## 2026-10-25 — Build Phase 4 of the wishlist (act on items from My wishlist)
 
 ### Prompts

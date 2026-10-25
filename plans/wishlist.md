@@ -175,14 +175,14 @@ the same HTMX response, without a reload.
 
 ### Acceptance criteria
 
-- [ ] The `wishlist` context processor also supplies the saved-item count
+- [x] The `wishlist` context processor also supplies the saved-item count
       (zero for anonymous requests), still in one query
-- [ ] The navbar link is a badge partial with a stable id and an `oob` flag,
+- [x] The navbar link is a badge partial with a stable id and an `oob` flag,
       showing the count only when it is above zero
-- [ ] HTMX responses from `wishlist:add` and `wishlist:remove` include the
+- [x] HTMX responses from `wishlist:add` and `wishlist:remove` include the
       badge as an out-of-band swap
-- [ ] The non-HTMX remove from the My wishlist page still redirects normally
-- [ ] Tests cover the count in the navbar and the out-of-band badge in both
+- [x] The non-HTMX remove from the My wishlist page still redirects normally
+- [x] Tests cover the count in the navbar and the out-of-band badge in both
       HTMX responses
 
 ---

@@ -9,6 +9,13 @@ from django.urls import reverse
 
 from .models import Wishlist, WishlistItem
 
+
+def _wishlist_badge(page):
+    """The navbar Wishlist link's markup, cut out of a rendered page."""
+    start = page.index('id="wishlist-badge"')
+    return page[start : page.index("</a>", start)]
+
+
 # --- Model behavior ---------------------------------------------------------
 
 
@@ -216,6 +223,28 @@ def test_remove_only_touches_your_own_wishlist(
     assert other_wishlist.items.get().product == product
 
 
+def test_htmx_add_and_remove_swap_the_navbar_badge_out_of_band(
+    client, customer, product
+):
+    client.force_login(customer)
+    htmx = {"HX-Request": "true"}
+
+    added = client.post(
+        reverse("wishlist:add", kwargs={"pk": product.pk}), headers=htmx
+    )
+    removed = client.post(
+        reverse("wishlist:remove", kwargs={"pk": product.pk}), headers=htmx
+    )
+
+    assert 'id="wishlist-badge"' in added.content.decode()
+    added_badge = _wishlist_badge(added.content.decode())
+    assert 'hx-swap-oob="true"' in added_badge
+    assert ">1</span>" in added_badge
+    removed_badge = _wishlist_badge(removed.content.decode())
+    assert 'hx-swap-oob="true"' in removed_badge
+    assert "</span>" not in removed_badge
+
+
 def test_plain_remove_redirects_to_list_with_message(
     client, customer, wishlist, product
 ):
@@ -417,6 +446,20 @@ def test_navbar_links_to_wishlist_when_signed_in(client, customer):
     response = client.get(reverse("products:catalog"))
 
     assert f'href="{reverse("wishlist:list")}"' in response.content.decode()
+
+
+def test_navbar_badge_shows_the_saved_count(
+    client, customer, wishlist, product, unavailable_product
+):
+    client.force_login(customer)
+
+    empty = _wishlist_badge(client.get(reverse("products:catalog")).content.decode())
+    wishlist.add(product)
+    wishlist.add(unavailable_product)
+    saved = _wishlist_badge(client.get(reverse("products:catalog")).content.decode())
+
+    assert "badge" not in empty.replace('id="wishlist-badge"', "")
+    assert ">2</span>" in saved
 
 
 def test_navbar_hides_wishlist_link_when_signed_out(client, db):
