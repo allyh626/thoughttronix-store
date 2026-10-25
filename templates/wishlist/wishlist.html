@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}Your Wishlist — The ThoughtTronix Store{% endblock %}
+
+{% block content %}
+  <h1 class="text-3xl font-bold">Your Wishlist</h1>
+  <p class="mt-2 opacity-70">The products you're thinking about, saved for later.</p>
+
+  {% if items %}
+    <div class="mt-6 overflow-x-auto rounded-box bg-base-100 shadow-md">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Price</th>
+            <th>Saved</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+            <tr>
+              <td>
+                <div class="flex items-center gap-4">
+                  <img src="{{ item.product.display_image_url }}" alt="{{ item.product.name }}"
+                       class="h-16 w-16 rounded-box object-cover" />
+                  <div class="space-y-1">
+                    <a href="{{ item.product.get_absolute_url }}" class="link-hover font-semibold">
+                      {{ item.product.name }}
+                    </a>
+                    {% if not item.product.is_available %}
+                      <div><span class="badge badge-warning badge-outline">Unavailable</span></div>
+                    {% endif %}
+                  </div>
+                </div>
+              </td>
+              <td>${{ item.product.price|intcomma }}</td>
+              <td>{{ item.added_at|date:"M j, Y" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="py-16 text-center">
+      <p class="text-5xl">💭</p>
+      <p class="mt-4 text-xl font-semibold">Your wishlist is empty</p>
+      <p class="mt-2 opacity-70">Save a product from its page and it will wait for you here.</p>
+      <a href="{% url 'products:catalog' %}" class="btn btn-primary btn-sm mt-6">
+        Browse the catalog
+      </a>
+    </div>
+  {% endif %}
+{% endblock %}

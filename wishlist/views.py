@@ -9,10 +9,23 @@ render time, so the partial always shows the state after the change.
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404, render
 from django.views import View
+from django.views.generic import ListView
 
 from products.models import Product
 
-from .models import Wishlist
+from .models import Wishlist, WishlistItem
+
+
+class WishlistView(LoginRequiredMixin, ListView):
+    """The My wishlist page: the signed-in user's saved products."""
+
+    template_name = "wishlist/wishlist.html"
+    context_object_name = "items"
+
+    def get_queryset(self):
+        return WishlistItem.objects.filter(
+            wishlist__user=self.request.user
+        ).select_related("product__category")
 
 
 class AddToWishlistView(LoginRequiredMixin, View):

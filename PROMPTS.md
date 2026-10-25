@@ -28,6 +28,46 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-25 — Build Phase 3 of the wishlist (My wishlist page)
+
+### Prompts
+1. /implement @prd/wishlist.md @plans/wishlist.md implement phase 3
+2. yes, go ahead
+3. go ahead
+4. yes, go ahead
+5. yes could you do that check please
+6. yes, go ahead
+
+### Summary
+- **Outcome:** Built Phase 3 of `plans/wishlist.md`:
+  - `WishlistView` (`LoginRequiredMixin` + `ListView`) at `/wishlist/`
+    (`wishlist:list`). It lists `WishlistItem`s filtered by
+    `wishlist__user=request.user`, with `select_related("product__category")`
+    so the page stays at 5 queries however many rows there are. Viewing the
+    page never creates an empty wishlist.
+  - `templates/wishlist/wishlist.html`: the h1 and opacity-70 description,
+    then a table with image, a name linking to the product page, price,
+    saved date, and the "Unavailable" badge. A 💭 empty state links to the
+    catalog.
+  - A "Wishlist" link in the navbar between Orders and Account, for
+    signed-in users only (no count yet; that's Phase 5).
+  - TDD for two behaviors: only your own items are listed, and newest
+    saved first. Plus 7 normal tests: anonymous redirect, row contents,
+    badge shown and not shown, empty state, and the navbar link signed in
+    and signed out. Full suite: 455 passed; `ruff check` and
+    `ruff format --check` clean.
+- **Deviations:** No recommendations were overridden. Following the saved
+  preference, each edit was explained before it was made and went through
+  the approval prompt. Asked for the optional check that the newest-first
+  test can really fail.
+- **Sideways:** The newest-first test passed before any code was written,
+  because Phase 1's `Meta.ordering = ["-added_at"]` already supplied the
+  ordering, so there was no RED step. To prove the test wasn't passing by
+  luck, the view was temporarily changed to `.order_by("added_at")`. The
+  test failed as expected, and the change was undone. The smoke test ran
+  against a scratch copy of the database to protect the real one. As
+  before, `uv run` printed the harmless `VIRTUAL_ENV` mismatch warning.
+
 ## 2026-10-21 — Build Phase 10 of the account security center (checkout email pre-fill)
 
 ### Prompts

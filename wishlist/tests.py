@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from http import HTTPStatus
 
 import pytest
@@ -253,6 +254,113 @@ def test_detail_saved_state_is_per_customer(client, other_customer, wishlist, pr
     response = client.get(product.get_absolute_url())
 
     assert "In wishlist (remove)" not in response.content.decode()
+
+
+# --- My wishlist page --------------------------------------------------------
+
+
+def test_list_shows_only_your_own_items(
+    client, customer, other_customer, wishlist, product, unavailable_product
+):
+    wishlist.add(product)
+    Wishlist.for_user(other_customer).add(unavailable_product)
+    client.force_login(customer)
+
+    response = client.get(reverse("wishlist:list"))
+
+    page = response.content.decode()
+    assert "Seraphine Home Hub" in page
+    assert "EchoPatch" not in page
+
+
+def test_list_shows_newest_saved_first(
+    client, customer, wishlist, product, unavailable_product
+):
+    # Saved first but dated newer, so creation order can't fake the result.
+    wishlist.add(unavailable_product)
+    wishlist.add(product)
+    wishlist.items.filter(product=unavailable_product).update(
+        added_at=datetime(2026, 2, 1, tzinfo=UTC)
+    )
+    wishlist.items.filter(product=product).update(
+        added_at=datetime(2026, 1, 1, tzinfo=UTC)
+    )
+    client.force_login(customer)
+
+    response = client.get(reverse("wishlist:list"))
+
+    page = response.content.decode()
+    assert page.index("EchoPatch") < page.index("Seraphine Home Hub")
+
+
+def test_anonymous_list_redirects_to_login(client):
+    response = client.get(reverse("wishlist:list"))
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert reverse("accounts:login") in response.url
+
+
+def test_list_row_shows_image_link_price_and_saved_date(
+    client, customer, wishlist, product
+):
+    wishlist.add(product)
+    # Noon UTC so the store's Chicago time zone keeps the same calendar day.
+    wishlist.items.update(added_at=datetime(2026, 1, 15, 12, tzinfo=UTC))
+    client.force_login(customer)
+
+    response = client.get(reverse("wishlist:list"))
+
+    page = response.content.decode()
+    assert response.status_code == HTTPStatus.OK
+    assert "Your Wishlist" in page
+    assert product.display_image_url in page
+    assert f'href="{product.get_absolute_url()}"' in page
+    assert "$349.99" in page
+    assert "Jan 15, 2026" in page
+
+
+def test_list_badges_unavailable_products(
+    client, customer, wishlist, unavailable_product
+):
+    wishlist.add(unavailable_product)
+    client.force_login(customer)
+
+    response = client.get(reverse("wishlist:list"))
+
+    assert "Unavailable" in response.content.decode()
+
+
+def test_list_does_not_badge_available_products(client, customer, wishlist, product):
+    wishlist.add(product)
+    client.force_login(customer)
+
+    response = client.get(reverse("wishlist:list"))
+
+    assert "Unavailable" not in response.content.decode()
+
+
+def test_empty_list_shows_empty_state(client, customer):
+    client.force_login(customer)
+
+    response = client.get(reverse("wishlist:list"))
+
+    page = response.content.decode()
+    assert "Your wishlist is empty" in page
+    assert f'href="{reverse("products:catalog")}"' in page
+
+
+def test_navbar_links_to_wishlist_when_signed_in(client, customer):
+    client.force_login(customer)
+
+    response = client.get(reverse("products:catalog"))
+
+    assert f'href="{reverse("wishlist:list")}"' in response.content.decode()
+
+
+def test_navbar_hides_wishlist_link_when_signed_out(client, db):
+    response = client.get(reverse("products:catalog"))
+
+    assert f'href="{reverse("wishlist:list")}"' not in response.content.decode()
 
 
 # --- Admin -------------------------------------------------------------------
