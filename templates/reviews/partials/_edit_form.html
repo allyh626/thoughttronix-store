@@ -1,0 +1,27 @@
+{# Editing a review in place: replaces its card. Save swaps the updated #}
+{# card back (via _edited.html), or this form with errors; Cancel fetches #}
+{# the unchanged card. #}
+<form
+  hx-post="{% url 'reviews:edit' review.pk %}"
+  hx-swap="outerHTML"
+  hx-disabled-elt="find button"
+  class="card bg-base-100 shadow-md"
+  novalidate>
+  <div class="card-body gap-4">
+    <h3 class="card-title text-lg">Edit your review</h3>
+    {% for field in form %}
+      {% include "products/partials/_field.html" %}
+    {% endfor %}
+    <div class="card-actions justify-end">
+      <button
+        type="button"
+        hx-get="{% url 'reviews:card' review.pk %}"
+        hx-target="closest form"
+        hx-swap="outerHTML"
+        class="btn btn-ghost btn-sm">
+        Cancel
+      </button>
+      <button type="submit" class="btn btn-primary btn-sm">Save changes</button>
+    </div>
+  </div>
+</form>

@@ -1,11 +1,37 @@
 {# One review: the saved censored name, never the live username. #}
+{# Only its author sees Edit and Delete; both swap this card in place. #}
 <article id="review-{{ review.pk }}" class="card bg-base-100 shadow-sm">
   <div class="card-body gap-2">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <span class="text-warning" aria-label="{{ review.rating }} out of 5 stars">{% for star in "12345" %}{% if forloop.counter <= review.rating %}★{% else %}☆{% endif %}{% endfor %}</span>
-      <span class="text-sm opacity-70">{{ review.display_name }} · {{ review.created_at|date:"M j, Y" }}</span>
+      <span class="text-sm opacity-70">
+        {{ review.display_name }} · {{ review.created_at|date:"M j, Y" }}
+        {% if review.edited_at %}<span class="badge badge-ghost badge-sm">edited</span>{% endif %}
+      </span>
     </div>
     <h3 class="font-semibold">{{ review.title }}</h3>
     <p class="whitespace-pre-line">{{ review.comment }}</p>
+    {% if review.author_id == user.pk %}
+      <div class="card-actions justify-end">
+        <button
+          type="button"
+          hx-get="{% url 'reviews:edit' review.pk %}"
+          hx-target="#review-{{ review.pk }}"
+          hx-swap="outerHTML"
+          class="btn btn-ghost btn-xs">
+          Edit
+        </button>
+        <button
+          type="button"
+          hx-post="{% url 'reviews:delete' review.pk %}"
+          hx-confirm="Delete your review? This can't be undone."
+          hx-target="#review-{{ review.pk }}"
+          hx-swap="outerHTML"
+          hx-disabled-elt="this"
+          class="btn btn-ghost btn-xs text-error">
+          Delete
+        </button>
+      </div>
+    {% endif %}
   </div>
 </article>

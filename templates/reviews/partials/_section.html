@@ -1,23 +1,11 @@
 {# The reviews block on a product page, from {% review_section product %}. #}
-{# prompt decides the top: the form, a sign-in hint, the ineligible hint, #}
-{# or nothing (staff, or a customer who already reviewed the product). #}
+{# _prompt.html decides the top: the form, a hint, or nothing. #}
 {# The list pins the visitor's own review, then pages everyone else's. #}
 <section class="mt-12" aria-labelledby="reviews-heading">
   <h2 id="reviews-heading" class="text-2xl font-bold">Customer reviews</h2>
   {% include "reviews/partials/_summary.html" %}
 
-  <div class="mt-4">
-    {% if prompt == "form" %}
-      {% include "reviews/partials/_form.html" %}
-    {% elif prompt == "sign_in" %}
-      <p class="opacity-70">
-        <a href="{% url 'accounts:login' %}?next={{ request.get_full_path|urlencode }}" class="link link-primary">Sign in</a>
-        to leave a review.
-      </p>
-    {% elif prompt == "ineligible" %}
-      <p class="opacity-70">You can review this product once an order containing it has been delivered.</p>
-    {% endif %}
-  </div>
+  {% include "reviews/partials/_prompt.html" %}
 
   <div id="review-list" class="mt-6 space-y-4">
     {% if own_review %}

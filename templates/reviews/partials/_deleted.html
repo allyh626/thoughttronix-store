@@ -1,0 +1,5 @@
+{# After a review is deleted. Nothing is left to replace the card, so it #}
+{# goes away; out-of-band, the average and count update and the prompt #}
+{# returns — the form, if the customer can write a new review. #}
+{% include "reviews/partials/_summary.html" with oob=True %}
+{% include "reviews/partials/_prompt.html" with oob=True %}

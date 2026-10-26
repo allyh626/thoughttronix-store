@@ -1,0 +1,4 @@
+{# After an edit is saved: the updated card replaces the form, and the #}
+{# average and count update out-of-band (the rating may have changed). #}
+{% include "reviews/partials/_card.html" %}
+{% include "reviews/partials/_summary.html" with oob=True %}

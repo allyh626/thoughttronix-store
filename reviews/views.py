@@ -62,3 +62,70 @@ class MoreReviewsView(View):
         return render(
             request, "reviews/partials/_more.html", {"product": product, "page": page}
         )
+
+
+class ReviewCardView(View):
+    """HTMX: one review card — what Cancel on the edit form swaps back."""
+
+    def get(self, request, pk):
+        review = get_object_or_404(Review, pk=pk)
+        return render(request, "reviews/partials/_card.html", {"review": review})
+
+
+class EditReviewView(LoginRequiredMixin, View):
+    """HTMX: edit your own review in place.
+
+    GET swaps the card for a pre-filled form; a valid POST swaps the
+    updated card back, with the average and count out-of-band. Reviews are
+    reached through ``request.user``, so anyone else's is a 404.
+    """
+
+    def get(self, request, pk):
+        review = get_object_or_404(request.user.reviews, pk=pk)
+        return render(
+            request,
+            "reviews/partials/_edit_form.html",
+            {"review": review, "form": ReviewForm(instance=review)},
+        )
+
+    def post(self, request, pk):
+        review = get_object_or_404(request.user.reviews, pk=pk)
+        form = ReviewForm(request.POST, instance=review)
+        if not form.is_valid():
+            return render(
+                request,
+                "reviews/partials/_edit_form.html",
+                {"review": review, "form": form},
+            )
+        review = form.save(commit=False)
+        review.save_edit()
+        return render(
+            request,
+            "reviews/partials/_edited.html",
+            {"review": review, "summary": review.product.reviews.rating_summary()},
+        )
+
+
+class DeleteReviewView(LoginRequiredMixin, View):
+    """HTMX: delete your own review.
+
+    The empty response removes the card; out-of-band, the average and
+    count update and the prompt returns — the form, if the customer is
+    still eligible to write a new review.
+    """
+
+    def post(self, request, pk):
+        review = get_object_or_404(request.user.reviews, pk=pk)
+        product = review.product
+        review.delete()
+        prompt = Review.objects.prompt_for(request.user, product)
+        return render(
+            request,
+            "reviews/partials/_deleted.html",
+            {
+                "product": product,
+                "summary": product.reviews.rating_summary(),
+                "prompt": prompt,
+                "form": ReviewForm() if prompt == "form" else None,
+            },
+        )

@@ -49,6 +49,18 @@ class ReviewQuerySet(models.QuerySet):
         ).exists()
         return delivered and not self.filter(author=user, product=product).exists()
 
+    def prompt_for(self, user, product) -> str | None:
+        """What sits above the list: ``"form"`` (an eligible customer),
+        ``"sign_in"`` (a signed-out visitor), ``"ineligible"`` (no Delivered
+        order of the product), or ``None`` (staff, or already reviewed)."""
+        if not user.is_authenticated:
+            return "sign_in"
+        if self.can_write(user, product):
+            return "form"
+        if user.is_staff or self.filter(author=user, product=product).exists():
+            return None
+        return "ineligible"
+
 
 class Review(models.Model):
     """One customer's review of one product.
@@ -94,3 +106,9 @@ class Review(models.Model):
         if self._state.adding:
             self.display_name = censor(self.author.username)
         super().save(*args, **kwargs)
+
+    def save_edit(self):
+        """Save a change to an existing review and mark it edited, which
+        shows the "edited" tag. No Delivered order is needed to edit."""
+        self.edited_at = timezone.now()
+        self.save()

@@ -458,6 +458,191 @@ def test_reviews_of_other_products_are_not_listed(
     assert "About EchoPatch" not in _detail(client, product)
 
 
+# --- Edit and delete your own review (HTMX) ---------------------------------
+
+
+def _other_customer():
+    return get_user_model().objects.create_user(username="olivia", password="pw")
+
+
+def test_only_the_author_sees_edit_and_delete(client, customer, product):
+    own = _review(product, customer)
+    other = _review(product, _other_customer())
+    client.force_login(customer)
+
+    page = _detail(client, product)
+
+    assert reverse("reviews:edit", kwargs={"pk": own.pk}) in page
+    assert reverse("reviews:delete", kwargs={"pk": own.pk}) in page
+    assert reverse("reviews:edit", kwargs={"pk": other.pk}) not in page
+    assert reverse("reviews:delete", kwargs={"pk": other.pk}) not in page
+    assert 'hx-confirm="Delete your review?' in page
+
+
+def test_signed_out_visitor_sees_no_edit_or_delete(client, customer, product):
+    _review(product, customer)
+
+    page = _detail(client, product)
+
+    assert "/edit/" not in page and "/delete/" not in page
+
+
+def test_edit_get_returns_a_prefilled_form(client, customer, product):
+    review = _review(product, customer, title="First thoughts")
+    client.force_login(customer)
+
+    response = client.get(reverse("reviews:edit", kwargs={"pk": review.pk}))
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.context["form"].instance == review
+    page = response.content.decode()
+    assert 'value="First thoughts"' in page
+    assert f'hx-get="{reverse("reviews:card", kwargs={"pk": review.pk})}"' in page
+
+
+@pytest.mark.parametrize(
+    ("method", "name"), [("get", "edit"), ("post", "edit"), ("post", "delete")]
+)
+def test_another_customers_review_is_not_found(client, customer, product, method, name):
+    review = _review(product, _other_customer())
+    client.force_login(customer)
+
+    response = getattr(client, method)(
+        reverse(f"reviews:{name}", kwargs={"pk": review.pk}), VALID_REVIEW
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    review.refresh_from_db()
+    assert review.title == "Reads my mind"
+
+
+@pytest.mark.parametrize("name", ["edit", "delete"])
+def test_anonymous_edit_and_delete_redirect_to_login(client, customer, product, name):
+    review = _review(product, customer)
+    url = reverse(f"reviews:{name}", kwargs={"pk": review.pk})
+
+    response = client.post(url, VALID_REVIEW)
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.url == f"{reverse('accounts:login')}?next={url}"
+    assert Review.objects.filter(pk=review.pk, edited_at=None).exists()
+
+
+def test_edit_saves_marks_edited_and_returns_the_card(client, customer, product):
+    review = _review(product, customer)
+    client.force_login(customer)
+
+    response = client.post(
+        reverse("reviews:edit", kwargs={"pk": review.pk}),
+        {"rating": "2", "title": "Second thoughts", "comment": "It got moody."},
+    )
+
+    review.refresh_from_db()
+    assert (review.rating, review.title) == (2, "Second thoughts")
+    assert review.edited_at is not None
+    assert (review.author, review.display_name) == (customer, "c****r")
+    page = response.content.decode()
+    assert f'id="review-{review.pk}"' in page
+    assert "Second thoughts" in page and "edited</span>" in page
+
+
+def test_edit_works_after_the_order_is_cancelled(client, customer, product):
+    order = _order(customer, product)
+    review = _review(product, customer)
+    order.status = Order.Status.CANCELLED
+    order.save()
+    client.force_login(customer)
+
+    client.post(reverse("reviews:edit", kwargs={"pk": review.pk}), VALID_REVIEW)
+
+    review.refresh_from_db()
+    assert review.edited_at is not None
+
+
+def test_edit_shows_errors_in_place(client, customer, product):
+    review = _review(product, customer)
+    client.force_login(customer)
+
+    response = client.post(
+        reverse("reviews:edit", kwargs={"pk": review.pk}),
+        {**VALID_REVIEW, "title": "x" * 51},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert "at most 50 characters" in response.context["form"].errors["title"][0]
+    review.refresh_from_db()
+    assert (review.title, review.edited_at) == ("Reads my mind", None)
+
+
+def test_unedited_review_has_no_edited_tag(client, customer, product):
+    _review(product, customer)
+
+    assert "edited</span>" not in _detail(client, product)
+
+
+def test_card_returns_the_unchanged_card_for_cancel(client, customer, product):
+    review = _review(product, customer, title="As it was")
+    client.force_login(customer)
+
+    response = client.get(reverse("reviews:card", kwargs={"pk": review.pk}))
+
+    page = response.content.decode()
+    assert response.status_code == HTTPStatus.OK
+    assert f'id="review-{review.pk}"' in page and "As it was" in page
+    assert "<form" not in page
+
+
+def test_edit_updates_the_average_and_count_in_place(client, customer, product):
+    _reviews_rated(product, 2)
+    review = _review(product, customer, rating=4)
+    client.force_login(customer)
+
+    response = client.post(
+        reverse("reviews:edit", kwargs={"pk": review.pk}), VALID_REVIEW
+    )
+
+    page = response.content.decode()
+    assert re.search(r'id="review-summary"[^>]*hx-swap-oob="true"', page)
+    assert "3.5 ★" in page and "(2 reviews)" in page
+
+
+def test_delete_is_post_only(client, customer, product):
+    review = _review(product, customer)
+    client.force_login(customer)
+
+    response = client.get(reverse("reviews:delete", kwargs={"pk": review.pk}))
+
+    assert response.status_code == HTTPStatus.METHOD_NOT_ALLOWED
+    assert Review.objects.exists()
+
+
+def test_delete_removes_the_review_and_brings_the_form_back(client, customer, product):
+    _order(customer, product)
+    review = _review(product, customer)
+    _reviews_rated(product, 2)
+    client.force_login(customer)
+
+    response = client.post(reverse("reviews:delete", kwargs={"pk": review.pk}))
+
+    assert not Review.objects.filter(pk=review.pk).exists()
+    page = response.content.decode()
+    assert f'id="review-{review.pk}"' not in page
+    assert re.search(r'id="review-prompt"[^>]*hx-swap-oob="true"', page)
+    assert "Post review" in page
+    assert "2.0 ★" in page and "(1 review)" in page
+
+
+def test_delete_without_a_delivered_order_shows_the_hint(client, customer, product):
+    review = _review(product, customer)
+    client.force_login(customer)
+
+    response = client.post(reverse("reviews:delete", kwargs={"pk": review.pk}))
+
+    page = response.content.decode()
+    assert INELIGIBLE_HINT in page and "Post review" not in page
+    assert "No reviews yet." in page
+
+
 # --- Reviews outlive orders and accounts, not products ----------------------
 
 

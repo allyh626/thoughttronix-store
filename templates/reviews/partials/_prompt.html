@@ -1,0 +1,15 @@
+{# What sits above the list: the form, a sign-in hint, the ineligible #}
+{# hint, or nothing (staff, or a customer who already reviewed it). With #}
+{# oob it swaps itself in out-of-band, after a review is deleted. #}
+<div id="review-prompt" class="mt-4"{% if oob %} hx-swap-oob="true"{% endif %}>
+  {% if prompt == "form" %}
+    {% include "reviews/partials/_form.html" %}
+  {% elif prompt == "sign_in" %}
+    <p class="opacity-70">
+      <a href="{% url 'accounts:login' %}?next={{ product.get_absolute_url|urlencode }}" class="link link-primary">Sign in</a>
+      to leave a review.
+    </p>
+  {% elif prompt == "ineligible" %}
+    <p class="opacity-70">You can review this product once an order containing it has been delivered.</p>
+  {% endif %}
+</div>

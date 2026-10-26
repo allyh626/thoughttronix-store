@@ -166,16 +166,16 @@ reload.
 
 ### Acceptance criteria
 
-- [ ] Edit and Delete appear only on the signed-in customer's own review
-- [ ] `reviews:edit` and `reviews:delete` reach only the customer's own
+- [x] Edit and Delete appear only on the signed-in customer's own review
+- [x] `reviews:edit` and `reviews:delete` reach only the customer's own
       reviews; another customer's review returns 404
-- [ ] Editing sets `edited_at`, the card shows "edited", and editing does
+- [x] Editing sets `edited_at`, the card shows "edited", and editing does
       not need a Delivered order
-- [ ] `reviews:card` returns the unchanged card for Cancel
-- [ ] Delete uses `hx-confirm`, removes the card in place, and brings the
+- [x] `reviews:card` returns the unchanged card for Cancel
+- [x] Delete uses `hx-confirm`, removes the card in place, and brings the
       form back for an eligible customer
-- [ ] The average and count update after edit and delete
-- [ ] Tests cover all of the above
+- [x] The average and count update after edit and delete
+- [x] Tests cover all of the above
 
 ---
 

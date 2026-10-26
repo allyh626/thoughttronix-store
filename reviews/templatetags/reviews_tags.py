@@ -18,24 +18,16 @@ def review_section(context, product):
     """The visitor's own review pinned first, then the first page of
     everyone else's, newest first, plus what this visitor may do.
 
-    ``prompt`` is one of ``"form"`` (an eligible customer), ``"sign_in"``
-    (a signed-out visitor), ``"ineligible"`` (no Delivered order of the
-    product), or ``None`` (staff, or a customer who already reviewed it).
+    ``prompt`` comes from ``Review.objects.prompt_for``.
     """
     user = context["user"]
     own_review = (
         product.reviews.filter(author=user).first() if user.is_authenticated else None
     )
-    if not user.is_authenticated:
-        prompt = "sign_in"
-    elif Review.objects.can_write(user, product):
-        prompt = "form"
-    elif user.is_staff or own_review:
-        prompt = None
-    else:
-        prompt = "ineligible"
+    prompt = Review.objects.prompt_for(user, product)
     others = product.reviews.others_than(user)
     return {
+        "user": user,
         "product": product,
         "summary": product.reviews.rating_summary(),
         "own_review": own_review,
