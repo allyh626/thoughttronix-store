@@ -5,6 +5,7 @@ HTMX endpoints render partials from ``reviews/partials/`` (never
 """
 
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.paginator import Paginator
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, render
 from django.views import View
@@ -12,15 +13,15 @@ from django.views import View
 from products.models import Product
 
 from .forms import ReviewForm
-from .models import Review
+from .models import Review, ReviewQuerySet
 
 
 class CreateReviewView(LoginRequiredMixin, View):
     """HTMX: post a review of a product.
 
     A valid review replaces the form (the customer now has a review, so no
-    form comes back) and joins the top of the list out-of-band. Errors
-    re-render the form in place.
+    form comes back) and joins the top of the list out-of-band, with the
+    average and count. Errors re-render the form in place.
     """
 
     def post(self, request, pk):
@@ -38,4 +39,26 @@ class CreateReviewView(LoginRequiredMixin, View):
         review.product = product
         review.author = request.user
         review.save()
-        return render(request, "reviews/partials/_created.html", {"review": review})
+        return render(
+            request,
+            "reviews/partials/_created.html",
+            {"review": review, "summary": product.reviews.rating_summary()},
+        )
+
+
+class MoreReviewsView(View):
+    """HTMX: "Show more" — the next page of everyone else's reviews.
+
+    The cards append to the list out-of-band; the button replaces itself
+    with the one for the following page, or with nothing on the last.
+    """
+
+    def get(self, request, pk):
+        product = get_object_or_404(Product, pk=pk)
+        others = product.reviews.others_than(request.user)
+        page = Paginator(others, ReviewQuerySet.PAGE_SIZE).get_page(
+            request.GET.get("page")
+        )
+        return render(
+            request, "reviews/partials/_more.html", {"product": product, "page": page}
+        )

@@ -1,0 +1,10 @@
+{# The average and count, or the empty state. With oob it swaps itself #}
+{# into the page out-of-band, after a review is posted. #}
+<p id="review-summary" class="mt-2 opacity-70"{% if oob %} hx-swap-oob="true"{% endif %}>
+  {% if summary.count %}
+    <span class="font-semibold text-warning">{{ summary.average }} ★</span>
+    ({{ summary.count }} review{{ summary.count|pluralize }})
+  {% else %}
+    No reviews yet.
+  {% endif %}
+</p>

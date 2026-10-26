@@ -1,0 +1,8 @@
+{# The response to "Show more". The button for the following page (or #}
+{# nothing) replaces the old one; the cards append to the list out-of-band. #}
+{% include "reviews/partials/_more_button.html" %}
+<div hx-swap-oob="beforeend:#review-list">
+  {% for review in page %}
+    {% include "reviews/partials/_card.html" %}
+  {% endfor %}
+</div>

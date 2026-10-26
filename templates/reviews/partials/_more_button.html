@@ -1,0 +1,15 @@
+{# "Show more": fetches the next page and replaces itself. With no next #}
+{# page only the empty wrapper renders, so the button goes away. #}
+<div id="review-more" class="mt-6 text-center">
+  {% if page.has_next %}
+    <button
+      type="button"
+      hx-get="{% url 'reviews:more' product.pk %}?page={{ page.next_page_number }}"
+      hx-target="#review-more"
+      hx-swap="outerHTML"
+      hx-disabled-elt="this"
+      class="btn btn-outline btn-sm">
+      Show more
+    </button>
+  {% endif %}
+</div>

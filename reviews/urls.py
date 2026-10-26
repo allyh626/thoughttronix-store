@@ -10,4 +10,9 @@ urlpatterns = [
         views.CreateReviewView.as_view(),
         name="create",
     ),
+    path(
+        "reviews/product/<int:pk>/more/",
+        views.MoreReviewsView.as_view(),
+        name="more",
+    ),
 ]

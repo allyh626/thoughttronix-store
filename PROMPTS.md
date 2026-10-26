@@ -28,6 +28,63 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-26 — Build Phase 2 of product reviews (average, pinning, "Show more" and demo reviews)
+
+### Prompts
+1. /implement @prd/product-reviews.md @plans/product-reviews.md implement phase 2
+2. yes those behaviors for tdd are fine
+3. yes that test is good *(behavior 1's RED test, the average and count)*
+4. yes you can move onto the next behavior
+5. yes i approve of that test *(behavior 2's RED test, the pinned own review)*
+6. yes you can move onto the next testing behavior
+7. yes *(behavior 3's RED test, "Show more")*
+8. yes you can finish the phase
+9. yes i have double checked phase two works manually in the browser
+
+### Summary
+- **Outcome:** Built Phase 2 of `plans/product-reviews.md`:
+  - `ReviewManager` became `ReviewQuerySet.as_manager()`, so
+    `product.reviews` gets the new methods. `rating_summary()` returns
+    the count and the average as a `Decimal` rounded half up to one place
+    (`None` without reviews). `others_than(user)` returns everyone else's
+    reviews, newest first, with a pk tie-break; `PAGE_SIZE = 5`.
+  - The reviews section shows "4.3 ★ (12 reviews)" or "No reviews yet."
+    (`_summary.html`, which replaced the old `#review-empty` paragraph),
+    pins the visitor's own review first, then page 1 of the others.
+  - `reviews:more` (`?page=N`) appends the next 5 cards out-of-band and
+    replaces the "Show more" button with the next one, or with nothing on
+    the last page (`_more.html`, `_more_button.html`).
+  - Posting a review now also swaps the summary in place.
+  - `seed` deletes every review in `_wipe`, adds 2 Delivered RecallPro
+    orders (`REVIEW_BACKING_ORDERS`, built after the random orders so
+    those stay the same), and creates 12 `DEMO_REVIEWS` through
+    `can_write` (a `CommandError` if one isn't eligible), each dated
+    after its author's Delivered order. RecallPro has 7 reviews; the demo
+    `customer` reviews MindSync and can still review DreamWeaver and
+    SyncRest. The summary line reports the reviews.
+  - TDD (3 behaviors, each RED on an assertion, then GREEN): the average
+    and count, the pinned own review with the first 5 others, and
+    "Show more" paging. Then 9 more regular tests. The suite went from
+    501 to 514, all passing; ruff check and format are clean, and no
+    migrations were missing. The user checked the phase in the browser
+    and confirmed it works.
+- **Deviations:** None. The user approved every TDD behavior and test as
+  proposed. As in Phase 1, browser steps came before the log and commit.
+- **Sideways:**
+  - The random seed orders give no product more than 5 delivered
+    customers, so "Show more" needed 2 extra backing orders. That moved
+    the seeded order count from 52 to 54 (still within the PRD's 40–60),
+    and the seed test changed to match.
+  - My code review found that reviews with the same `created_at` could
+    be skipped or repeated across "Show more" pages. Fixed with a `-pk`
+    tie-break in `others_than`. No migration was needed.
+  - Two edge cases were left: a hand-edited `?page=` past the end
+    returns the last page again, and a junk value returns page 1. Only
+    someone typing the URL by hand would see either.
+  - To protect the real database, the seed and pages were checked against
+    a throwaway test database. As before, `uv run` printed the harmless
+    `VIRTUAL_ENV` mismatch warning.
+
 ## 2026-10-26 — Build Phase 1 of product reviews (write and see a review)
 
 ### Prompts

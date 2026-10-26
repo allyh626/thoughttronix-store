@@ -9,7 +9,8 @@ Demo logins (documented in the README):
     admin / admin123        superuser
     employee / employee123  staff, "Junior Thought Curator"
     customer / customer123  a plain customer, with order history, a live cart,
-                            a four-item wishlist, and two saved addresses
+                            a four-item wishlist, two saved addresses, and a
+                            review of MindSync
 """
 
 import random
@@ -31,6 +32,7 @@ from accounts.models import Address, SignInAttempt
 from orders.models import Cart, Coupon, Order, OrderItem
 from products.models import Category, Product, Tag
 from products.validators import validate_product_image
+from reviews.models import Review
 from wishlist.models import Wishlist
 
 # Product photos, one per slug (products/seed_images/<slug>.png). A product
@@ -503,8 +505,133 @@ CUSTOMER_ORDERS = [
 ]
 
 # Background orders spread across the trailing six months so the Phase 7
-# dashboard has a real time axis. 48 here + 4 above = 52 total.
+# dashboard has a real time axis. 48 here + 4 above + 2 below = 54 total.
 BACKGROUND_ORDER_COUNT = 48
+
+# Delivered orders that back two extra RecallPro reviews: the random
+# background orders give no product more than five delivered customers, and
+# "Show more" needs six. (days ago, username, [(product slug, quantity)]).
+REVIEW_BACKING_ORDERS = [
+    (33, "lvasquez", [("recallpro", 1)]),
+    (26, "hpark", [("recallpro", 1)]),
+]
+
+# Demo reviews: (product slug, author, days after the author's first
+# Delivered order of it, rating, title, comment). Every author has that
+# order, so the data obeys the eligibility rule. RecallPro gets seven, so
+# "Show more" shows; 'customer' reviews MindSync (pinned for them) and
+# leaves DreamWeaver and SyncRest unreviewed, so the form shows there.
+DEMO_REVIEWS = [
+    (
+        "recallpro",
+        "bcrane",
+        5,
+        5,
+        "Found my keys. And 1997.",
+        "Remembered where I left my keys, my first locker combination, and a "
+        "conversation I had hoped to forget. Five stars, no regrets I can't "
+        "now recall in full.",
+    ),
+    (
+        "recallpro",
+        "dcole",
+        4,
+        4,
+        "Great, if slightly too thorough",
+        "Works as advertised. I now remember every password I have ever had, "
+        "which is convenient, and every song I hate, which is not.",
+    ),
+    (
+        "recallpro",
+        "mwren",
+        9,
+        5,
+        "My husband can no longer win arguments",
+        "Playback with timestamps. He says he never promised to clean the "
+        "gutters. RecallPro says otherwise, at 4:12 PM on a Tuesday.",
+    ),
+    (
+        "recallpro",
+        "snakamura",
+        3,
+        3,
+        "Works, but the dreams are archived too",
+        "Memory recall is crisp. I just wasn't expecting my dreams to be "
+        "indexed and searchable. Some of them should stay unsearchable.",
+    ),
+    (
+        "recallpro",
+        "tokafor",
+        7,
+        4,
+        "Studying is a different sport now",
+        "Read the textbook once, remembered all of it. Took one star off "
+        "because it also remembered the ads in the margins.",
+    ),
+    (
+        "recallpro",
+        "lvasquez",
+        6,
+        2,
+        "I remember the terms of service",
+        "All of them. Every clause. Clause 14(c) in particular keeps me up at "
+        "night. The device works; I wish I had read less before buying it.",
+    ),
+    (
+        "recallpro",
+        "hpark",
+        2,
+        5,
+        "Never forgot a birthday since",
+        "My mother cried. Happy tears, for once. Well worth the gentle hum I "
+        "now hear whenever I think about her.",
+    ),
+    (
+        "mindsync",
+        "customer",
+        9,
+        4,
+        "Finishes my sentences",
+        "Comfortable headband, quick pairing. It finished my sentences within "
+        "a week, which is great until it starts finishing my wife's.",
+    ),
+    (
+        "mindsync",
+        "dcole",
+        6,
+        5,
+        "Meetings take four minutes now",
+        "The whole team wears one. We skip the talking and just agree. HR has "
+        "asked us to start disagreeing again, for the paperwork.",
+    ),
+    (
+        "mindsync",
+        "snakamura",
+        4,
+        3,
+        "Fine, but it hears the snacks",
+        "Sync is solid. Every time I think about a cookie, my partner knows. "
+        "Our pantry is now locked.",
+    ),
+    (
+        "veil",
+        "gfinch",
+        8,
+        5,
+        "Finally, quiet",
+        "Nothing gets in, nothing gets out. My thoughts are my own again, for "
+        "the price of looking like a very well-dressed beekeeper.",
+    ),
+    (
+        "veil",
+        "tokafor",
+        5,
+        4,
+        "Blocks the ads in my head",
+        "The targeted daydreams stopped within an hour. Slightly warm in the "
+        "summer, but I'll take sweaty over surveilled.",
+    ),
+]
 
 # Shipping addresses for the background orders. US-only, like checkout.
 SEED_ADDRESSES = [
@@ -560,6 +687,7 @@ class Command(BaseCommand):
         self._create_customer_addresses()
         self._create_orders()
         self._create_coupons()
+        self._create_reviews()
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -569,6 +697,7 @@ class Command(BaseCommand):
                 f"{get_user_model().objects.count()} users, "
                 f"{Order.objects.count()} orders, "
                 f"{Coupon.objects.count()} coupons, "
+                f"{Review.objects.count()} reviews, "
                 f"and a live cart, {len(CUSTOMER_WISHLIST)} wishlist items, "
                 f"and {Address.objects.count()} saved addresses for 'customer'."
             )
@@ -576,6 +705,9 @@ class Command(BaseCommand):
 
     def _wipe(self):
         """Remove everything the seed owns; the rebuild starts from zero."""
+        # All reviews, not only the demo ones: they would cascade with their
+        # products anyway, and a review must never outlive its backing order.
+        Review.objects.all().delete()
         Order.objects.all().delete()
         Coupon.objects.all().delete()  # after orders: Order.coupon is PROTECT
         Cart.objects.all().delete()
@@ -754,6 +886,19 @@ class Command(BaseCommand):
                 rng=rng,
             )
 
+        # After the background loop, so the random orders stay unchanged.
+        for days_ago, username, lines in REVIEW_BACKING_ORDERS:
+            self._build_order(
+                user=User.objects.get(username=username),
+                created_at=now - timedelta(days=days_ago, hours=rng.randint(1, 23)),
+                status=Order.Status.DELIVERED,
+                lines=[
+                    (Product.objects.get(slug=slug), quantity)
+                    for slug, quantity in lines
+                ],
+                rng=rng,
+            )
+
     def _create_coupons(self):
         """Dates are relative to today, so every state stays on show."""
         today = timezone.localdate()
@@ -768,6 +913,33 @@ class Command(BaseCommand):
                 is_retired=retired,
             )
             coupon.products.set(Product.objects.filter(slug__in=slugs))
+
+    def _create_reviews(self):
+        """Each review through the eligibility rule, dated a few days after
+        its author's first Delivered order of the product."""
+        User = get_user_model()
+        for slug, username, days_after, rating, title, comment in DEMO_REVIEWS:
+            product = Product.objects.get(slug=slug)
+            author = User.objects.get(username=username)
+            if not Review.objects.can_write(author, product):
+                raise CommandError(
+                    f"Demo review of {slug} by {username} has no Delivered order."
+                )
+            delivered = (
+                author.orders.filter(
+                    status=Order.Status.DELIVERED, items__product=product
+                )
+                .order_by("created_at")
+                .first()
+            )
+            Review.objects.create(
+                product=product,
+                author=author,
+                rating=rating,
+                title=title,
+                comment=comment,
+                created_at=delivered.created_at + timedelta(days=days_after),
+            )
 
     def _build_order(self, *, user, created_at, status, lines, rng):
         """One order with denormalized addresses and purchase-time prices."""

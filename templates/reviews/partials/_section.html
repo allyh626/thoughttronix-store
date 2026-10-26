@@ -1,8 +1,10 @@
 {# The reviews block on a product page, from {% review_section product %}. #}
 {# prompt decides the top: the form, a sign-in hint, the ineligible hint, #}
 {# or nothing (staff, or a customer who already reviewed the product). #}
+{# The list pins the visitor's own review, then pages everyone else's. #}
 <section class="mt-12" aria-labelledby="reviews-heading">
   <h2 id="reviews-heading" class="text-2xl font-bold">Customer reviews</h2>
+  {% include "reviews/partials/_summary.html" %}
 
   <div class="mt-4">
     {% if prompt == "form" %}
@@ -18,11 +20,12 @@
   </div>
 
   <div id="review-list" class="mt-6 space-y-4">
-    {% for review in reviews %}
+    {% if own_review %}
+      {% include "reviews/partials/_card.html" with review=own_review %}
+    {% endif %}
+    {% for review in page %}
       {% include "reviews/partials/_card.html" %}
     {% endfor %}
   </div>
-  {% if not reviews %}
-    <p id="review-empty" class="mt-6 opacity-70">No reviews yet.</p>
-  {% endif %}
+  {% include "reviews/partials/_more_button.html" %}
 </section>

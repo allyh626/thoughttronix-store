@@ -5,33 +5,41 @@ owns everything about reviews and the products app only places the tag.
 """
 
 from django import template
+from django.core.paginator import Paginator
 
 from ..forms import ReviewForm
-from ..models import Review
+from ..models import Review, ReviewQuerySet
 
 register = template.Library()
 
 
 @register.inclusion_tag("reviews/partials/_section.html", takes_context=True)
 def review_section(context, product):
-    """Every review, newest first, plus what this visitor may do.
+    """The visitor's own review pinned first, then the first page of
+    everyone else's, newest first, plus what this visitor may do.
 
     ``prompt`` is one of ``"form"`` (an eligible customer), ``"sign_in"``
     (a signed-out visitor), ``"ineligible"`` (no Delivered order of the
     product), or ``None`` (staff, or a customer who already reviewed it).
     """
     user = context["user"]
+    own_review = (
+        product.reviews.filter(author=user).first() if user.is_authenticated else None
+    )
     if not user.is_authenticated:
         prompt = "sign_in"
     elif Review.objects.can_write(user, product):
         prompt = "form"
-    elif user.is_staff or product.reviews.filter(author=user).exists():
+    elif user.is_staff or own_review:
         prompt = None
     else:
         prompt = "ineligible"
+    others = product.reviews.others_than(user)
     return {
         "product": product,
-        "reviews": product.reviews.all(),
+        "summary": product.reviews.rating_summary(),
+        "own_review": own_review,
+        "page": Paginator(others, ReviewQuerySet.PAGE_SIZE).get_page(1),
         "prompt": prompt,
         "form": ReviewForm() if prompt == "form" else None,
         "request": context["request"],

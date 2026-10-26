@@ -1,3 +1,5 @@
+from decimal import ROUND_HALF_UP, Decimal
+
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -13,7 +15,30 @@ def censor(username: str) -> str:
     return f"{username[0]}****{username[-1]}"
 
 
-class ReviewManager(models.Manager):
+class ReviewQuerySet(models.QuerySet):
+    # Reviews per page on the product page; "Show more" loads the next page.
+    PAGE_SIZE = 5
+
+    def others_than(self, user):
+        """Everyone else's reviews, newest first — a signed-in customer's
+        own review is pinned on its own, never repeated in the list.
+
+        The pk tie-break keeps pages stable, so "Show more" never skips or
+        repeats reviews posted at the same moment.
+        """
+        others = self.exclude(author=user) if user.is_authenticated else self
+        return others.order_by("-created_at", "-pk")
+
+    def rating_summary(self) -> dict:
+        """The average rating, rounded half up to one decimal place, and
+        the count. The average is ``None`` when there are no reviews."""
+        totals = self.aggregate(average=models.Avg("rating"), count=models.Count("pk"))
+        if totals["average"] is not None:
+            totals["average"] = Decimal(str(totals["average"])).quantize(
+                Decimal("0.1"), ROUND_HALF_UP
+            )
+        return totals
+
     def can_write(self, user, product) -> bool:
         """Only a customer who has received the product — a Delivered
         order containing it — and hasn't reviewed it yet. Never staff."""
@@ -52,7 +77,7 @@ class Review(models.Model):
     created_at = models.DateTimeField(default=timezone.now)
     edited_at = models.DateTimeField(null=True, blank=True)
 
-    objects = ReviewManager()
+    objects = ReviewQuerySet.as_manager()
 
     class Meta:
         ordering = ["-created_at"]

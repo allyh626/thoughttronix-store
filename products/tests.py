@@ -1,3 +1,4 @@
+import io
 from decimal import Decimal
 from http import HTTPStatus
 
@@ -6,9 +7,11 @@ from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.db import IntegrityError
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.html import escape
 
 from orders.models import CartItem, Order, OrderItem
+from reviews.models import Review
 from wishlist.models import Wishlist, WishlistItem
 
 from .models import Category, Product, Tag
@@ -251,7 +254,7 @@ def test_seed_builds_the_demo_world(db, media_root):
     assert mark_one.category.name == "Defense"
 
     # 40–60 orders across the trailing six months, per the PRD.
-    assert Order.objects.count() == 52
+    assert Order.objects.count() == 54
     statuses = set(Order.objects.values_list("status", flat=True))
     assert statuses == set(Order.Status.values)
 
@@ -267,6 +270,7 @@ def test_seed_is_idempotent(db, media_root):
         Order.objects.count(),
         OrderItem.objects.count(),
         WishlistItem.objects.count(),
+        Review.objects.count(),
     )
 
     call_command("seed")
@@ -279,6 +283,7 @@ def test_seed_is_idempotent(db, media_root):
         Order.objects.count(),
         OrderItem.objects.count(),
         WishlistItem.objects.count(),
+        Review.objects.count(),
     )
 
     assert first == second
@@ -293,3 +298,34 @@ def test_seed_resets_every_wishlist(db, media_root, other_customer):
 
     assert not Wishlist.objects.filter(user=other_customer).exists()
     assert Wishlist.objects.count() == 1  # only the demo customer's
+
+
+def test_seed_creates_demo_reviews_backed_by_delivered_orders(
+    db, media_root, other_customer
+):
+    out = io.StringIO()
+    call_command("seed", stdout=out)
+    reviews = list(Review.objects.select_related("product", "author"))
+
+    assert f"{len(reviews)} reviews" in out.getvalue()
+    for review in reviews:
+        assert review.author.orders.filter(
+            status=Order.Status.DELIVERED, items__product=review.product
+        ).exists()
+        assert review.created_at < timezone.now()
+    assert Review.objects.filter(product__slug="recallpro").count() > 5
+    assert Review.objects.filter(
+        author__username="customer", product__slug="mindsync"
+    ).exists()
+
+    Review.objects.create(
+        product=Product.objects.get(slug="veil"),
+        author=other_customer,
+        rating=1,
+        title="Not seeded",
+        comment="Gone after the next seed.",
+    )
+    call_command("seed")
+
+    assert not Review.objects.filter(title="Not seeded").exists()
+    assert Review.objects.count() == len(reviews)

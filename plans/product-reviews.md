@@ -134,18 +134,18 @@ reviews so "Show more" is visible right after seeding.
 
 ### Acceptance criteria
 
-- [ ] The average and count are correct, rounded to one decimal place, and
+- [x] The average and count are correct, rounded to one decimal place, and
       a product with no reviews shows "No reviews yet."
-- [ ] The signed-in customer's own review is pinned first and not
+- [x] The signed-in customer's own review is pinned first and not
       duplicated in the list
-- [ ] The page shows 5 reviews, `reviews:more` returns the next 5 newest
+- [x] The page shows 5 reviews, `reviews:more` returns the next 5 newest
       first, and the button hides on the last page
-- [ ] Creating a review updates the average and count without a reload
-- [ ] `seed` wipes reviews, creates demo reviews only for authors with a
+- [x] Creating a review updates the average and count without a reload
+- [x] `seed` wipes reviews, creates demo reviews only for authors with a
       Delivered order of that product, gives one product more than 5
       reviews, and reports the reviews in its summary
-- [ ] Running `seed` twice gives the same result
-- [ ] Tests cover all of the above
+- [x] Running `seed` twice gives the same result
+- [x] Tests cover all of the above
 
 ---
 

@@ -1,3 +1,4 @@
+import re
 from datetime import timedelta
 from decimal import Decimal
 from http import HTTPStatus
@@ -105,6 +106,37 @@ def test_staff_are_never_eligible(staff_user, product):
     _order(staff_user, product)
 
     assert Review.objects.can_write(staff_user, product) is False
+
+
+def _reviews_rated(product, *ratings):
+    """One review per rating, each by a different customer."""
+    User = get_user_model()
+    for number, rating in enumerate(ratings):
+        author = User.objects.create_user(username=f"reviewer{number}", password="pw")
+        _review(product, author, rating=rating)
+
+
+@pytest.mark.parametrize(
+    ("ratings", "average"),
+    [
+        ((5, 4, 4), Decimal("4.3")),
+        ((4, 4, 4, 5), Decimal("4.3")),  # 4.25 rounds half up
+        ((1,), Decimal("1.0")),
+    ],
+)
+def test_rating_summary_rounds_the_average_to_one_decimal(product, ratings, average):
+    _reviews_rated(product, *ratings)
+
+    assert product.reviews.rating_summary() == {
+        "average": average,
+        "count": len(ratings),
+    }
+
+
+def test_rating_summary_of_a_product_without_reviews(product, unavailable_product):
+    _reviews_rated(unavailable_product, 5)
+
+    assert product.reviews.rating_summary() == {"average": None, "count": 0}
 
 
 # --- Post a review (HTMX) ----------------------------------------------------
@@ -318,6 +350,100 @@ def test_product_page_lists_reviews_newest_first(client, product, customer):
     assert 'aria-label="2 out of 5 stars"' in page
     assert timezone.localdate().strftime("%b") in page
     assert "No reviews yet." not in page
+
+
+def _others(product, count):
+    """``count`` reviews by other customers, one a day, newest first."""
+    User = get_user_model()
+    return [
+        _review(
+            product,
+            User.objects.create_user(username=f"other{days}", password="pw"),
+            created_at=timezone.now() - timedelta(days=days),
+        )
+        for days in range(count)
+    ]
+
+
+def _card_ids(page):
+    return [int(pk) for pk in re.findall(r'id="review-(\d+)"', page)]
+
+
+def test_own_review_is_pinned_first_then_the_five_newest_others(
+    client, customer, product
+):
+    own = _review(product, customer, created_at=timezone.now() - timedelta(days=30))
+    others = _others(product, 7)
+    client.force_login(customer)
+
+    page = _detail(client, product)
+
+    assert _card_ids(page) == [own.pk] + [review.pk for review in others[:5]]
+
+
+def test_show_more_returns_the_next_five_and_hides_on_the_last_page(client, product):
+    others = _others(product, 12)
+    url = reverse("reviews:more", kwargs={"pk": product.pk})
+
+    second = client.get(url, {"page": 2}).content.decode()
+    last = client.get(url, {"page": 3}).content.decode()
+
+    assert _card_ids(second) == [review.pk for review in others[5:10]]
+    assert f"{url}?page=3" in second and "Show more" in second
+    assert _card_ids(last) == [review.pk for review in others[10:]]
+    assert "Show more" not in last
+
+
+def test_show_more_never_repeats_the_pinned_own_review(client, customer, product):
+    own = _review(product, customer, created_at=timezone.now() - timedelta(days=30))
+    others = _others(product, 7)
+    client.force_login(customer)
+
+    response = client.get(
+        reverse("reviews:more", kwargs={"pk": product.pk}), {"page": 2}
+    )
+
+    assert own.pk not in _card_ids(response.content.decode())
+    assert _card_ids(response.content.decode()) == [r.pk for r in others[5:]]
+
+
+@pytest.mark.parametrize(("count", "shown"), [(5, False), (6, True)])
+def test_product_page_offers_show_more_only_past_five(client, product, count, shown):
+    _others(product, count)
+
+    page = _detail(client, product)
+
+    assert ("Show more" in page) is shown
+
+
+def test_product_page_shows_the_average_and_count(client, product):
+    _reviews_rated(product, 5, 4, 4)
+
+    page = _detail(client, product)
+
+    assert "4.3 ★" in page
+    assert "(3 reviews)" in page
+    assert "No reviews yet." not in page
+
+
+def test_product_page_counts_a_single_review_in_the_singular(client, product):
+    _reviews_rated(product, 4)
+
+    assert "(1 review)" in _detail(client, product)
+
+
+def test_create_updates_the_average_and_count_in_place(client, customer, product):
+    _reviews_rated(product, 2)
+    _order(customer, product)
+    client.force_login(customer)
+
+    response = client.post(
+        reverse("reviews:create", kwargs={"pk": product.pk}), VALID_REVIEW
+    )
+
+    page = response.content.decode()
+    assert re.search(r'id="review-summary"[^>]*hx-swap-oob="true"', page)
+    assert "3.5 ★" in page and "(2 reviews)" in page
 
 
 def test_product_page_shows_an_empty_state_without_reviews(client, product):
