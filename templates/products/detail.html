@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load cart_extras humanize %}
+{% load cart_extras humanize reviews_tags %}
 
 {% block title %}{{ product.name }} — The ThoughtTronix Store{% endblock %}
 
@@ -58,4 +58,6 @@
       {% endif %}
     </div>
   </div>
+
+  {% review_section product %}
 {% endblock %}

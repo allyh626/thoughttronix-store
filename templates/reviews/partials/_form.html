@@ -1,0 +1,19 @@
+{# The review form. Posts via HTMX and swaps itself: back with errors, or #}
+{# away (via _created.html) once the review is saved. #}
+<form
+  id="review-form"
+  hx-post="{% url 'reviews:create' product.pk %}"
+  hx-swap="outerHTML"
+  hx-disabled-elt="find button"
+  class="card bg-base-100 shadow-md"
+  novalidate>
+  <div class="card-body gap-4">
+    <h3 class="card-title text-lg">Write a review</h3>
+    {% for field in form %}
+      {% include "products/partials/_field.html" %}
+    {% endfor %}
+    <div class="card-actions justify-end">
+      <button type="submit" class="btn btn-primary btn-sm">Post review</button>
+    </div>
+  </div>
+</form>

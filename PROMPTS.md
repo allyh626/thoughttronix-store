@@ -28,6 +28,191 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-26 — Build Phase 1 of product reviews (write and see a review)
+
+### Prompts
+1. /implement @prd/product-reviews.md @plans/product-reviews.md implement phase 1
+2. yes, approved *(the three TDD behaviors)*
+3. yes i approve *(behavior 1's RED test, the censored name)*
+4. yes, move on to behavior 2
+5. yes thats a good test *(behavior 2's RED test, eligibility)*
+6. ye syou can move onto behavior
+7. yes *(behavior 3's RED test, create refuses an ineligible customer)*
+8. okay thank you yes you can continue with the phase and tests
+9. yes please give steps to check this phase in the broswer before marking the acceptance criteria, updating prompts and committing
+10. perfect, everything works as it should in this phase
+
+### Summary
+- **Outcome:** Built Phase 1 of `plans/product-reviews.md`:
+  - New `reviews` app (installed, URLs included, `reviews` namespace)
+    with the `Review` model and its migration: product and author FKs
+    (both `CASCADE`), a 1–5 rating, a 50-character title, a
+    1,000-character comment, `display_name`, `is_flagged`, `created_at`
+    and `edited_at`, with the product–author pair unique.
+  - `censor()` gives first letter + `****` + last letter, and `save()`
+    stores it only on create, so the name survives `deactivate()`.
+  - `Review.objects.can_write(user, product)`: true only for a non-staff
+    customer with a Delivered order containing the product and no review
+    of it yet.
+  - `reviews:create` (POST only, sign-in required) returns 403 for anyone
+    `can_write` refuses. Errors re-render the form in place. A saved
+    review clears the form and joins the top of the list through an
+    out-of-band swap that also removes "No reviews yet."
+  - A `{% review_section product %}` inclusion tag puts the reviews block
+    on the product page (form, sign-in hint, the "once an order
+    containing it has been delivered" hint, or nothing for staff and
+    customers who already reviewed), so the products view didn't change.
+    `ReviewForm` reuses `StyledModelForm`.
+  - TDD (3 behaviors, each RED on an assertion, then GREEN): the censored
+    name, eligibility, and create refusing an ineligible customer. Then
+    29 more regular tests. The suite went from 462 to 501, all passing,
+    and ruff check and format are clean. The user checked every page
+    state in the browser and confirmed it works.
+- **Deviations:** None. The user approved every TDD behavior and test as
+  proposed. Before the log and commit, the user asked for browser steps
+  first, so I gave a step-by-step walkthrough using the seeded orders
+  (MindSync and Dreamweaver delivered, Seraphine Mini shipped, Veil
+  placed).
+- **Sideways:**
+  - `ruff format` re-wrapped some hand-split lines in the new test file.
+    That was whitespace only, and the suite stayed green.
+  - My code review left two edge cases unfixed:
+    - Two browser tabs posting at the exact same moment would hit the
+      unique constraint and get a server error, though the data stays
+      correct.
+    - If a customer becomes ineligible between loading the page and
+      posting, the 403 is silent, because HTMX doesn't swap error
+      responses.
+  - The empty note first read "No one has reviewed this product yet." I
+    changed it to the PRD's "No reviews yet." before any test used it.
+
+## 2026-10-26 — Write the product reviews plan (continues the entry below)
+
+### Prompts
+1. /prd-to-plan @prd/product-reviews.md
+2. yes you can combine phase 7 and 2 *(fold the seed phase into Phase 2)*
+3. update PROMPTS.md
+
+### Summary
+- **Outcome:** Wrote `plans/product-reviews.md` with 6 phases:
+  1. Write and see a review (the tracer bullet)
+  2. Average, pinning, "Show more" and demo reviews
+  3. Edit and delete your own review
+  4. Banned-word flag and the Reviews tab
+  5. Staff edit and delete any review
+  6. Report a review
+
+  The header pins the `reviews` app, the `reviews:` URL names and paths
+  (product-page actions under `/reviews/...`, back office under
+  `/backoffice/reviews/...`), the `Review` and `ReviewReport` models, and
+  the permission rules. No feature code was written. The PRD and plan are
+  still uncommitted.
+- **Deviations:** I re-offered the 7-phase breakdown with a recommendation
+  to fold the seed into the phases. That was based on the user's note at
+  the end of the wishlist build that its seed phase should have come
+  earlier. The user agreed to combine Phase 7 into Phase 2. I also added a
+  demo report to Phase 6's seed, which came with the option I recommended
+  but wasn't confirmed on its own.
+- **Sideways:** The plan swaps the PRD's "updated timestamp" for an
+  `edited_at` field that stays empty until the first edit, so clearing a
+  flag doesn't trigger the "edited" tag. I flagged this and the demo
+  report for the user to check, and neither is confirmed yet.
+
+## 2026-10-26 — Rebuild (via /grill-me) the product reviews design from saved answers, write its PRD, and start the plan
+
+### Prompts
+1. the grill me intervew has been completed for product reviews correct?
+2. /grill-me thoughttronix wants an option for customers to leave reviews on products. Each customer who has bought something can leave one review per purchased item. Each review displays a censored  version of the username which left the review, a title,  rating, and typed comment. Staff can edit or delete any review, while customers can only do this for their own reviews. Creating, editing, or deleting a review should update smoothly without reloading the full page or losing the customers place. have i not ran this and answered all of the questions for it?? i have all my answers still saved in my recent responses
+3. no i dont have you questions but i can paste my responses if you will understand them
+4. okay here are my responses: *(pasted answers from the lost interview, one per line; the decision each was matched to is in brackets)*
+   - yes a customer can only leave one review on a product, but can edit it later for instances like you explained. *(one review per product, editable)*
+   - do option b *(unclear — re-asked as Q1)*
+   - A, and editing doesn't need a delivered order, just an existing review. *(review survives cancellation)*
+   - yes option c *(unclear — re-asked as Q2)*
+   - a, whole stars 1 to 5
+   - a, both required *(title and comment)*
+   - a, edit in place
+   - a, hx-confirm *(delete confirmation)*
+   - a, average on the product detail page only
+   - a, newest first with mine pinned
+   - a, show more button
+   - a, and yes the author stays the same *(staff edits)*
+   - a, posted date with edited tag
+   - a, delete their reviews *(on account deletion — later reversed in prompt 10)*
+   - i like the hint for the signed out option on A with the wording being something along the lines of " your order hasnt been shipped yet or product not purchased, unless you had better wordking in mind *(hint for customers who can't review)*
+   - a, with the extra-reviews product *(seed)*
+   - A, staff moderate after, could you add a check on reviews that are suspected to be inappropriate for staff to view in the back office or review tab somewhere *(publish immediately, flag suspicious reviews)*
+   - i like option c but would also like all of the reviews to be displayed on the back office reviews tab, flagged or not. *(flag sources unclear — re-asked as Q3)*
+   - a, flagged first with filter tabs
+   - a, and yes new reports can flag it again *(staff clear flags)*
+   - a, re-check customer edits, staff edits clear it
+   - a, with the reason drop-down *(reporting)*
+   - c, not required only for Other *(report note)*
+   - a, a constant in code *(banned-word list)*
+   - yes, all defaults are fine *(unclear — re-listed as Q5)*
+5. a, delivered only *(Q1, only a Delivered order unlocks the review form)*
+6. c, first and last letter *(Q2, username censoring)*
+7. c, both *(Q3, flags come from the banned-word check and customer reports)*
+8. a, once per review *(Q4, any signed-in customer reports a review once, never their own)*
+9. can you half the title and comment length limit, and in the back office reviews tab for employees the review author usernamesa rent censored, all other defaults are acceptable *(Q5, defaults)*
+10. on review usernmae censorship if its 2 characters or fewer such as ay will be a****y and a would be a****a as to not reveal anything. and could you keep reviews up even after an account is deleted, only inform staff in the back office that the review is from a deactivated account. everything else is good
+11. for censorship can you keep a fixed number of astriks as to not reveal anything, and yes i would liek the censored name saved and displayed even after account deletion *(Q6, save the censored name on the review)*
+12. /to-prd
+13. /prd-to-plan @prd/product-reviews.md
+14. stop
+15. before creating the plan i would like to update PROMPTS.md with the standard prompt
+
+### Summary
+- **Outcome:** The product reviews design was rebuilt and finished:
+  - Only customers with a Delivered order containing the product can
+    write a review, one per product. Editing needs only an existing
+    review, and a review stays up if the order is later cancelled.
+  - Each review has a 1–5 star rating, a title (max 50 characters) and a
+    comment (max 1,000). It shows a censored name, always first letter +
+    `****` + last letter (`a****n`, `a****y`, `a****a`), saved on the
+    review when it's written.
+  - The product page shows the average, newest first with your own
+    review pinned, 5 at a time with "Show more". Create, edit, delete and
+    report all work through HTMX with no full reload.
+  - Moderation: reviews post right away. A banned-word constant flags
+    them on create and on customer edits, and so do customer reports
+    (once per customer, a reason drop-down, a note required only for
+    Other). A staff edit or "Clear flag" clears it. The new back-office
+    Reviews tab lists all reviews, flagged first, with full usernames and
+    a "Deactivated account" badge.
+  - Deleting an account keeps that customer's reviews. Deleting a product
+    deletes its reviews.
+
+  `/to-prd` wrote `prd/product-reviews.md` with 40 user stories.
+  `/prd-to-plan` proposed 7 phases, but the user stopped before approving
+  them, so no plan file exists yet. No feature code was written, and the
+  PRD is still uncommitted.
+- **Deviations:** The user picked the recommended option in Q1–Q4. In Q5
+  the user halved my proposed title and comment limits (100/2,000 →
+  50/1,000) and asked for full usernames on the back-office tab. In prompt
+  10 the user reversed their earlier pasted answer "delete their reviews",
+  so reviews are kept after account deletion. That led to Q6, where they
+  picked my recommendation to save the censored name on the review. The
+  user also replaced my censoring rule twice (see Sideways).
+- **Sideways:**
+  - The original grill-me interview ran in an earlier session that was
+    never logged, and no PRD was written from it, so its questions were
+    lost. I rebuilt it from the user's pasted answers. Four answers ("do
+    option b", two "option c"s, and "all defaults are fine") couldn't be
+    matched without their questions, so I re-asked them as Q1–Q3 and Q5.
+  - My first censoring proposal kept one star per hidden letter and used
+    `a*` for short names, which revealed the username's length. The user
+    corrected the short-name format and then asked for a fixed four stars
+    for every name.
+  - Checking the code during Q6 showed that `User.deactivate()` renames
+    the account to `deleted-user-<pk>`, which would have changed the
+    public name on kept reviews. Saving the censored name fixed that.
+  - `/to-prd` filled in some details the interview never decided: a new
+    `reviews` app, plain-form back-office actions, a clean customer edit
+    not clearing a flag, deleted-account reviews still counting toward the
+    average, and seed-created Delivered orders. I listed them for the user
+    to check, and they haven't been confirmed yet.
+
 ## 2026-10-25 — Build Phase 6 of the wishlist (seed the demo wishlist)
 
 ### Prompts

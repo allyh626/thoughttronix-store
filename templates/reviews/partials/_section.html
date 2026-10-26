@@ -1,0 +1,28 @@
+{# The reviews block on a product page, from {% review_section product %}. #}
+{# prompt decides the top: the form, a sign-in hint, the ineligible hint, #}
+{# or nothing (staff, or a customer who already reviewed the product). #}
+<section class="mt-12" aria-labelledby="reviews-heading">
+  <h2 id="reviews-heading" class="text-2xl font-bold">Customer reviews</h2>
+
+  <div class="mt-4">
+    {% if prompt == "form" %}
+      {% include "reviews/partials/_form.html" %}
+    {% elif prompt == "sign_in" %}
+      <p class="opacity-70">
+        <a href="{% url 'accounts:login' %}?next={{ request.get_full_path|urlencode }}" class="link link-primary">Sign in</a>
+        to leave a review.
+      </p>
+    {% elif prompt == "ineligible" %}
+      <p class="opacity-70">You can review this product once an order containing it has been delivered.</p>
+    {% endif %}
+  </div>
+
+  <div id="review-list" class="mt-6 space-y-4">
+    {% for review in reviews %}
+      {% include "reviews/partials/_card.html" %}
+    {% endfor %}
+  </div>
+  {% if not reviews %}
+    <p id="review-empty" class="mt-6 opacity-70">No reviews yet.</p>
+  {% endif %}
+</section>

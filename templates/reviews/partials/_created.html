@@ -1,0 +1,8 @@
+{# After a review is posted. The empty first element replaces the form — #}
+{# the customer now has a review — and the rest swap out-of-band: the new #}
+{# card joins the top of the list, and the "no reviews" note goes away. #}
+<div id="review-form"></div>
+<div hx-swap-oob="afterbegin:#review-list">
+  {% include "reviews/partials/_card.html" %}
+</div>
+<p id="review-empty" hx-swap-oob="delete"></p>

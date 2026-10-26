@@ -1,0 +1,11 @@
+{# One review: the saved censored name, never the live username. #}
+<article id="review-{{ review.pk }}" class="card bg-base-100 shadow-sm">
+  <div class="card-body gap-2">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <span class="text-warning" aria-label="{{ review.rating }} out of 5 stars">{% for star in "12345" %}{% if forloop.counter <= review.rating %}★{% else %}☆{% endif %}{% endfor %}</span>
+      <span class="text-sm opacity-70">{{ review.display_name }} · {{ review.created_at|date:"M j, Y" }}</span>
+    </div>
+    <h3 class="font-semibold">{{ review.title }}</h3>
+    <p class="whitespace-pre-line">{{ review.comment }}</p>
+  </div>
+</article>
