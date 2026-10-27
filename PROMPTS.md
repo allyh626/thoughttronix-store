@@ -36,6 +36,8 @@ Each entry has this shape:
 3. everything works, commit it
 4. is the implement skill not supposed to append prompts.md before committing every phase?
 5. no i would like it committed and pushed the same way phase 1 and 2 were, and can you make those tests fail to ensure they can and arent just testing blindly then?
+6. yes run the code review
+7. yes fix all three and push it
 
 ### Summary
 - **Outcome:** Built Phase 3 of `plans/product-reviews.md`:
@@ -71,7 +73,24 @@ Each entry has this shape:
     RED first), skipped the code review, and committed without this log
     entry or a push. The user caught it. The code review was not run
     afterwards either. The commit was amended to include this entry
-    (it had not been pushed yet), then pushed.
+    (it had not been pushed yet), then pushed. The user then asked for
+    the review, which ran after the push, so its fixes went into a
+    second commit.
+  - The code review raised 7 findings, and I fixed 3. (1) Pressing Save
+    with nothing changed still set `edited_at` and showed "edited"; the
+    edit view now checks `form.has_changed()` first. A break check
+    confirmed the new test catches it. (2) `prompt_for` repeated a
+    "has this user reviewed it?" query the template tag had already
+    run; it now takes an optional `reviewed` argument. (3) `prompt_for`
+    now checks staff right after the sign-in check, and the Delivered
+    order lookup moved into a shared `_received()` helper. 3 new test
+    cases, so the suite is now at 534. Left alone: the login page
+    swapping into the card when a session expires (Phase 1's form, the
+    cart and the wishlist all do this; it needs a project-wide fix), the
+    sign-in `next` dropping query strings (on purpose), a full `save()`
+    that could overwrite a flag changed at the same moment (flags arrive
+    in Phase 4; watch for it then), and the public card endpoint (every
+    card is already public on the product page).
   - The deliberate breaks found one weak test: Cancel pointing at the
     wrong URL went uncaught, because the card URL `/reviews/<pk>/` is
     also part of the form's `/reviews/<pk>/edit/`. The test now checks

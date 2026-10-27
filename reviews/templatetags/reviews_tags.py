@@ -24,7 +24,7 @@ def review_section(context, product):
     own_review = (
         product.reviews.filter(author=user).first() if user.is_authenticated else None
     )
-    prompt = Review.objects.prompt_for(user, product)
+    prompt = Review.objects.prompt_for(user, product, reviewed=own_review is not None)
     others = product.reviews.others_than(user)
     return {
         "user": user,

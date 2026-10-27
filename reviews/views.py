@@ -97,8 +97,9 @@ class EditReviewView(LoginRequiredMixin, View):
                 "reviews/partials/_edit_form.html",
                 {"review": review, "form": form},
             )
-        review = form.save(commit=False)
-        review.save_edit()
+        if form.has_changed():  # an unchanged save isn't an edit
+            review = form.save(commit=False)
+            review.save_edit()
         return render(
             request,
             "reviews/partials/_edited.html",
@@ -118,7 +119,7 @@ class DeleteReviewView(LoginRequiredMixin, View):
         review = get_object_or_404(request.user.reviews, pk=pk)
         product = review.product
         review.delete()
-        prompt = Review.objects.prompt_for(request.user, product)
+        prompt = Review.objects.prompt_for(request.user, product, reviewed=False)
         return render(
             request,
             "reviews/partials/_deleted.html",

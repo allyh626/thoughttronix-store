@@ -39,27 +39,40 @@ class ReviewQuerySet(models.QuerySet):
             )
         return totals
 
+    @staticmethod
+    def _received(user, product) -> bool:
+        """Whether the user has a Delivered order containing the product."""
+        return Order.objects.filter(
+            user=user, status=Order.Status.DELIVERED, items__product=product
+        ).exists()
+
     def can_write(self, user, product) -> bool:
         """Only a customer who has received the product — a Delivered
         order containing it — and hasn't reviewed it yet. Never staff."""
         if user.is_staff:
             return False
-        delivered = Order.objects.filter(
-            user=user, status=Order.Status.DELIVERED, items__product=product
-        ).exists()
-        return delivered and not self.filter(author=user, product=product).exists()
+        return (
+            self._received(user, product)
+            and not self.filter(author=user, product=product).exists()
+        )
 
-    def prompt_for(self, user, product) -> str | None:
+    def prompt_for(self, user, product, reviewed: bool | None = None) -> str | None:
         """What sits above the list: ``"form"`` (an eligible customer),
         ``"sign_in"`` (a signed-out visitor), ``"ineligible"`` (no Delivered
-        order of the product), or ``None`` (staff, or already reviewed)."""
+        order of the product), or ``None`` (staff, or already reviewed).
+
+        Pass ``reviewed`` when the caller already knows whether the user has
+        a review of the product, to skip looking it up again.
+        """
         if not user.is_authenticated:
             return "sign_in"
-        if self.can_write(user, product):
-            return "form"
-        if user.is_staff or self.filter(author=user, product=product).exists():
+        if user.is_staff:
             return None
-        return "ineligible"
+        if reviewed is None:
+            reviewed = self.filter(author=user, product=product).exists()
+        if reviewed:
+            return None
+        return "form" if self._received(user, product) else "ineligible"
 
 
 class Review(models.Model):

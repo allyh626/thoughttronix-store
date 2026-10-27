@@ -574,6 +574,29 @@ def test_edit_shows_errors_in_place(client, customer, product):
     assert (review.title, review.edited_at) == ("Reads my mind", None)
 
 
+def test_saving_without_changes_is_not_an_edit(client, customer, product):
+    review = _review(product, customer)
+    client.force_login(customer)
+
+    response = client.post(
+        reverse("reviews:edit", kwargs={"pk": review.pk}),
+        {"rating": "4", "title": review.title, "comment": review.comment},
+    )
+
+    review.refresh_from_db()
+    assert review.edited_at is None
+    page = response.content.decode()
+    assert f'id="review-{review.pk}"' in page and "edited</span>" not in page
+
+
+@pytest.mark.parametrize(("reviewed", "queries"), [(True, 0), (False, 1)])
+def test_prompt_for_skips_the_review_lookup_when_told(
+    customer, product, django_assert_num_queries, reviewed, queries
+):
+    with django_assert_num_queries(queries):
+        Review.objects.prompt_for(customer, product, reviewed=reviewed)
+
+
 def test_unedited_review_has_no_edited_tag(client, customer, product):
     _review(product, customer)
 
