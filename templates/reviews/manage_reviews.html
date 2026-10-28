@@ -59,6 +59,8 @@
               </td>
               <td class="whitespace-nowrap">{{ review.created_at|date:"M j, Y" }}</td>
               <td class="whitespace-nowrap text-right">
+                <a href="{% url 'reviews:manage_edit' review.pk %}"
+                   class="btn btn-ghost btn-xs">Edit</a>
                 {% if review.is_flagged %}
                   <form method="post"
                         action="{% url 'reviews:clear_flag' review.pk %}"
@@ -68,6 +70,8 @@
                     <button type="submit" class="btn btn-ghost btn-xs">Clear flag</button>
                   </form>
                 {% endif %}
+                <a href="{% url 'reviews:manage_delete' review.pk %}"
+                   class="btn btn-ghost btn-xs text-error">Delete</a>
               </td>
             </tr>
           {% endfor %}

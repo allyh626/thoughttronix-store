@@ -6,12 +6,13 @@ HTMX endpoints render partials from ``reviews/partials/`` (never
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.messages.views import SuccessMessageMixin
 from django.core.paginator import Paginator
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
+from django.urls import reverse, reverse_lazy
 from django.views import View
-from django.views.generic import ListView
+from django.views.generic import DeleteView, ListView, UpdateView
 
 from accounts.mixins import StaffRequiredMixin
 from products.models import Product
@@ -77,15 +78,15 @@ class ReviewCardView(View):
 
 
 class EditReviewView(LoginRequiredMixin, View):
-    """HTMX: edit your own review in place.
+    """HTMX: edit a review in place — your own, or any review for staff.
 
     GET swaps the card for a pre-filled form; a valid POST swaps the
-    updated card back, with the average and count out-of-band. Reviews are
-    reached through ``request.user``, so anyone else's is a 404.
+    updated card back, with the average and count out-of-band. A customer
+    reaches only their own reviews, so anyone else's is a 404.
     """
 
     def get(self, request, pk):
-        review = get_object_or_404(request.user.reviews, pk=pk)
+        review = get_object_or_404(Review.objects.editable_by(request.user), pk=pk)
         return render(
             request,
             "reviews/partials/_edit_form.html",
@@ -93,7 +94,7 @@ class EditReviewView(LoginRequiredMixin, View):
         )
 
     def post(self, request, pk):
-        review = get_object_or_404(request.user.reviews, pk=pk)
+        review = get_object_or_404(Review.objects.editable_by(request.user), pk=pk)
         form = ReviewForm(request.POST, instance=review)
         if not form.is_valid():
             return render(
@@ -103,7 +104,7 @@ class EditReviewView(LoginRequiredMixin, View):
             )
         if form.has_changed():  # an unchanged save isn't an edit
             review = form.save(commit=False)
-            review.save_edit()
+            review.save_edit(request.user)
         return render(
             request,
             "reviews/partials/_edited.html",
@@ -112,15 +113,15 @@ class EditReviewView(LoginRequiredMixin, View):
 
 
 class DeleteReviewView(LoginRequiredMixin, View):
-    """HTMX: delete your own review.
+    """HTMX: delete a review — your own, or any review for staff.
 
     The empty response removes the card; out-of-band, the average and
     count update and the prompt returns — the form, if the customer is
-    still eligible to write a new review.
+    still eligible to write a new review (never for staff).
     """
 
     def post(self, request, pk):
-        review = get_object_or_404(request.user.reviews, pk=pk)
+        review = get_object_or_404(Review.objects.editable_by(request.user), pk=pk)
         product = review.product
         review.delete()
         prompt = Review.objects.prompt_for(request.user, product, reviewed=False)
@@ -180,3 +181,38 @@ class ClearFlagView(StaffRequiredMixin, View):
         if request.POST.get("filter") == "flagged":
             url += "?filter=flagged"
         return redirect(url)
+
+
+class ManageReviewUpdateView(StaffRequiredMixin, UpdateView):
+    """Edit any review. As on the product page, the author and censored
+    name stay, the review is marked edited, and its flag clears."""
+
+    queryset = Review.objects.select_related("product", "author")
+    form_class = ReviewForm
+    context_object_name = "review"
+    template_name = "reviews/manage_review_form.html"
+    success_url = reverse_lazy("reviews:manage")
+    extra_context = {"section": "reviews"}
+
+    def form_valid(self, form):
+        # An unchanged save isn't an edit: nothing is written and a flag
+        # stays, so say so rather than "saved".
+        if form.has_changed():
+            form.instance.save_edit(self.request.user)
+            messages.success(self.request, f"“{form.instance.title}” saved.")
+        else:
+            messages.info(self.request, f"No changes to “{form.instance.title}”.")
+        return redirect(self.success_url)
+
+
+class ManageReviewDeleteView(StaffRequiredMixin, SuccessMessageMixin, DeleteView):
+    """Delete any review, after a confirmation page."""
+
+    queryset = Review.objects.select_related("product", "author")
+    context_object_name = "review"
+    template_name = "reviews/manage_review_confirm_delete.html"
+    success_url = reverse_lazy("reviews:manage")
+    extra_context = {"section": "reviews"}
+
+    def get_success_message(self, cleaned_data):
+        return f"“{self.object.title}” deleted."

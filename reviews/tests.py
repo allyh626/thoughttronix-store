@@ -769,6 +769,10 @@ def _manage_requests(review):
     return [
         ("get", reverse("reviews:manage")),
         ("post", reverse("reviews:clear_flag", kwargs={"pk": review.pk})),
+        ("get", reverse("reviews:manage_edit", kwargs={"pk": review.pk})),
+        ("post", reverse("reviews:manage_edit", kwargs={"pk": review.pk})),
+        ("get", reverse("reviews:manage_delete", kwargs={"pk": review.pk})),
+        ("post", reverse("reviews:manage_delete", kwargs={"pk": review.pk})),
     ]
 
 
@@ -892,6 +896,169 @@ def test_reviews_tab_is_in_the_back_office_tab_bar(client, staff_user):
     assert re.search(
         r'class="tab tab-active"\s+href="/backoffice/reviews/"', reviews_page
     )
+
+
+# --- Staff edit and delete any review ---------------------------------------
+
+
+def test_staff_edit_keeps_the_author_marks_edited_and_clears_the_flag(
+    client, staff_user, customer, product
+):
+    review = _review(product, customer, comment="Honestly a scam.")
+    client.force_login(staff_user)
+
+    response = client.post(
+        reverse("reviews:edit", kwargs={"pk": review.pk}),
+        {**VALID_REVIEW, "comment": "Honestly [removed]."},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    review.refresh_from_db()
+    assert review.comment == "Honestly [removed]."
+    assert (review.author, review.display_name) == (customer, "c****r")
+    assert review.edited_at is not None
+    assert not review.is_flagged
+
+
+def test_staff_can_delete_any_review_but_customers_cannot(
+    client, staff_user, customer, product
+):
+    review = _review(product, _other_customer())
+    _reviews_rated(product, 2)
+    url = reverse("reviews:delete", kwargs={"pk": review.pk})
+
+    client.force_login(customer)
+    assert client.post(url).status_code == HTTPStatus.NOT_FOUND
+    assert Review.objects.filter(pk=review.pk).exists()
+
+    client.force_login(staff_user)
+    response = client.post(url)
+
+    assert response.status_code == HTTPStatus.OK
+    assert not Review.objects.filter(pk=review.pk).exists()
+    page = response.content.decode()
+    assert "2.0 ★" in page and "(1 review)" in page
+    assert "Post review" not in page
+
+
+def test_staff_see_edit_and_delete_on_every_review(
+    client, staff_user, customer, product
+):
+    reviews = [_review(product, customer), _review(product, _other_customer())]
+    client.force_login(staff_user)
+
+    page = _detail(client, product)
+
+    for review in reviews:
+        assert reverse("reviews:edit", kwargs={"pk": review.pk}) in page
+        assert reverse("reviews:delete", kwargs={"pk": review.pk}) in page
+    assert page.count('hx-confirm="Delete this review?') == 2
+    assert "Delete your review?" not in page
+
+
+def test_reviews_tab_rows_link_to_edit_and_delete(
+    client, staff_user, customer, product
+):
+    review = _review(product, customer)
+    client.force_login(staff_user)
+
+    page = client.get(reverse("reviews:manage")).content.decode()
+
+    assert reverse("reviews:manage_edit", kwargs={"pk": review.pk}) in page
+    assert reverse("reviews:manage_delete", kwargs={"pk": review.pk}) in page
+
+
+def test_manage_edit_shows_a_prefilled_form_with_the_full_username(
+    client, staff_user, customer, product
+):
+    review = _review(product, customer, title="First thoughts")
+    client.force_login(staff_user)
+
+    response = client.get(reverse("reviews:manage_edit", kwargs={"pk": review.pk}))
+
+    assert response.status_code == HTTPStatus.OK
+    page = response.content.decode()
+    assert 'value="First thoughts"' in page
+    assert customer.username in page and "c****r" not in page
+
+
+def test_manage_edit_keeps_the_author_clears_the_flag_and_redirects(
+    client, staff_user, customer, product
+):
+    review = _review(product, customer, comment="Honestly a scam.")
+    client.force_login(staff_user)
+
+    response = client.post(
+        reverse("reviews:manage_edit", kwargs={"pk": review.pk}),
+        {**VALID_REVIEW, "title": "Tidied up", "comment": "Honestly [removed]."},
+    )
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.url == reverse("reviews:manage")
+    review.refresh_from_db()
+    assert (review.title, review.comment) == ("Tidied up", "Honestly [removed].")
+    assert (review.author, review.display_name) == (customer, "c****r")
+    assert review.edited_at is not None
+    assert not review.is_flagged
+    assert "“Tidied up” saved." in client.get(response.url).content.decode()
+
+
+def test_manage_edit_without_changes_says_so_and_keeps_the_flag(
+    client, staff_user, customer, product
+):
+    review = _review(product, customer, comment="Honestly a scam.")
+    client.force_login(staff_user)
+
+    response = client.post(
+        reverse("reviews:manage_edit", kwargs={"pk": review.pk}),
+        {"rating": "4", "title": review.title, "comment": review.comment},
+    )
+
+    review.refresh_from_db()
+    assert review.is_flagged and review.edited_at is None
+    page = client.get(response.url).content.decode()
+    assert "No changes to “Reads my mind”." in page
+    assert "“Reads my mind” saved." not in page
+
+
+def test_manage_edit_shows_errors_in_place(client, staff_user, customer, product):
+    review = _review(product, customer)
+    client.force_login(staff_user)
+
+    response = client.post(
+        reverse("reviews:manage_edit", kwargs={"pk": review.pk}),
+        {**VALID_REVIEW, "comment": ""},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.context["form"].errors["comment"]
+    review.refresh_from_db()
+    assert review.edited_at is None
+
+
+def test_manage_delete_confirms_first(client, staff_user, customer, product):
+    review = _review(product, customer, title="Going soon")
+    client.force_login(staff_user)
+
+    response = client.get(reverse("reviews:manage_delete", kwargs={"pk": review.pk}))
+
+    assert response.status_code == HTTPStatus.OK
+    assert "Delete “Going soon”?" in response.content.decode()
+    assert Review.objects.filter(pk=review.pk).exists()
+
+
+def test_manage_delete_deletes_and_redirects_with_a_message(
+    client, staff_user, customer, product
+):
+    review = _review(product, customer, title="Going soon")
+    client.force_login(staff_user)
+
+    response = client.post(reverse("reviews:manage_delete", kwargs={"pk": review.pk}))
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.url == reverse("reviews:manage")
+    assert not Review.objects.filter(pk=review.pk).exists()
+    assert "“Going soon” deleted." in client.get(response.url).content.decode()
 
 
 # --- Reviews outlive orders and accounts, not products ----------------------

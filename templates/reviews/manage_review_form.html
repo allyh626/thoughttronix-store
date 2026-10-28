@@ -1,0 +1,31 @@
+{% extends "backoffice/base.html" %}
+
+{% block title %}Edit review — Back office{% endblock %}
+
+{% block backoffice %}
+  <div class="card mx-auto max-w-2xl bg-base-100 shadow-md">
+    <div class="card-body">
+      <h2 class="card-title">Edit review</h2>
+      <p class="text-sm opacity-70">
+        {{ review.product.name }} · by {{ review.author.username }}
+        {% if not review.author.is_active %}
+          <span class="badge badge-warning badge-outline badge-sm">Deactivated account</span>
+        {% endif %}
+      </p>
+      <p class="text-sm opacity-70">
+        The review stays credited to its author and shows an “edited” tag.
+        Saving a change clears its flag.
+      </p>
+      <form method="post" class="mt-2 space-y-4" novalidate>
+        {% csrf_token %}
+        {% for field in form %}
+          {% include "products/partials/_field.html" %}
+        {% endfor %}
+        <div class="mt-2 flex items-center justify-end gap-2">
+          <a href="{% url 'reviews:manage' %}" class="btn btn-ghost">Cancel</a>
+          <button type="submit" class="btn btn-primary">Save review</button>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

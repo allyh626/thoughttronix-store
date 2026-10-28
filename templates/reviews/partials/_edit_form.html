@@ -8,7 +8,7 @@
   class="card bg-base-100 shadow-md"
   novalidate>
   <div class="card-body gap-4">
-    <h3 class="card-title text-lg">Edit your review</h3>
+    <h3 class="card-title text-lg">Edit {% if user.is_staff %}this{% else %}your{% endif %} review</h3>
     {% for field in form %}
       {% include "products/partials/_field.html" %}
     {% endfor %}

@@ -227,13 +227,13 @@ clears its flag.
 
 ### Acceptance criteria
 
-- [ ] Staff see Edit and Delete on every review on the product page, and
+- [x] Staff see Edit and Delete on every review on the product page, and
       `reviews:edit` and `reviews:delete` accept any review for staff
-- [ ] `reviews:manage_edit` and `reviews:manage_delete` are staff-only and
+- [x] `reviews:manage_edit` and `reviews:manage_delete` are staff-only and
       redirect to the Reviews tab with a success message
-- [ ] A staff edit keeps the author and `display_name`, sets `edited_at`,
+- [x] A staff edit keeps the author and `display_name`, sets `edited_at`,
       and clears the flag
-- [ ] Tests cover all of the above
+- [x] Tests cover all of the above
 
 ---
 

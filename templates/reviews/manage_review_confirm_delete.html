@@ -1,0 +1,20 @@
+{% extends "backoffice/base.html" %}
+
+{% block title %}Delete review — Back office{% endblock %}
+
+{% block backoffice %}
+  <div class="card mx-auto max-w-lg bg-base-100 shadow-md">
+    <div class="card-body">
+      <h2 class="card-title">Delete “{{ review.title }}”?</h2>
+      <p class="opacity-70">
+        {{ review.author.username }}’s review of {{ review.product.name }} comes
+        off the product page, and its average updates. This can't be undone.
+      </p>
+      <form method="post" class="mt-4 flex justify-end gap-2">
+        {% csrf_token %}
+        <a href="{% url 'reviews:manage' %}" class="btn btn-ghost">Cancel</a>
+        <button type="submit" class="btn btn-error">Delete review</button>
+      </form>
+    </div>
+  </div>
+{% endblock %}

@@ -1,5 +1,5 @@
 {# One review: the saved censored name, never the live username. #}
-{# Only its author sees Edit and Delete; both swap this card in place. #}
+{# Its author and staff see Edit and Delete; both swap this card in place. #}
 <article id="review-{{ review.pk }}" class="card bg-base-100 shadow-sm">
   <div class="card-body gap-2">
     <div class="flex flex-wrap items-center justify-between gap-2">
@@ -11,7 +11,7 @@
     </div>
     <h3 class="font-semibold">{{ review.title }}</h3>
     <p class="whitespace-pre-line">{{ review.comment }}</p>
-    {% if review.author_id == user.pk %}
+    {% if review.author_id == user.pk or user.is_staff %}
       <div class="card-actions justify-end">
         <button
           type="button"
@@ -24,7 +24,7 @@
         <button
           type="button"
           hx-post="{% url 'reviews:delete' review.pk %}"
-          hx-confirm="Delete your review? This can't be undone."
+          hx-confirm="Delete {% if user.is_staff %}this{% else %}your{% endif %} review? This can't be undone."
           hx-target="#review-{{ review.pk }}"
           hx-swap="outerHTML"
           hx-disabled-elt="this"

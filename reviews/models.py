@@ -53,6 +53,11 @@ class ReviewQuerySet(models.QuerySet):
         others = self.exclude(author=user) if user.is_authenticated else self
         return others.order_by("-created_at", "-pk")
 
+    def editable_by(self, user):
+        """The reviews this user may edit or delete: staff any of them, a
+        customer only their own — anyone else's is out of reach."""
+        return self if user.is_staff else self.filter(author=user)
+
     def for_moderation(self):
         """The back office's order: flagged reviews first, so staff deal
         with problems before anything else, then newest first."""
@@ -150,14 +155,19 @@ class Review(models.Model):
             self._flag_if_banned()
         super().save(*args, **kwargs)
 
-    def save_edit(self):
-        """Save the author's change to their review and mark it edited,
-        which shows the "edited" tag. No Delivered order is needed to edit.
+    def save_edit(self, editor):
+        """Save a change to the review and mark it edited, which shows the
+        "edited" tag. No Delivered order is needed to edit. The author and
+        saved display name never change, whoever edits.
 
-        The edit is re-checked for banned words; a clean edit leaves an
-        existing flag alone, since only staff clear flags."""
+        A staff edit clears the flag — staff have fixed the review. The
+        author's edit is re-checked for banned words; a clean edit leaves
+        an existing flag alone, since only staff clear flags."""
         self.edited_at = timezone.now()
-        self._flag_if_banned()
+        if editor.is_staff:
+            self.is_flagged = False
+        else:
+            self._flag_if_banned()
         self.save()
 
     def clear_flag(self):

@@ -28,6 +28,64 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-28 — Build Phase 5 of product reviews (staff edit and delete any review)
+
+### Prompts
+1. /implement @prd/product-reviews.md @plans/product-reviews.md implement phase 5
+2. yes
+3. yes that looks correct
+4. yes
+5. yes that looks correct
+6. yes you can do behavior three now
+7. yes that looks correct
+8. yes you can continue with the rest of phase five
+9. ok let me know what the code review finds
+10. okay yes i believe the two you suggested should be fixed, fix three and eight
+11. yes phase six looks correctly implemented from the broswer
+
+### Summary
+- **Outcome:** Built Phase 5 of `plans/product-reviews.md`:
+  - `ReviewQuerySet.editable_by(user)`: staff reach every review, a
+    customer only their own. The product-page `reviews:edit` and
+    `reviews:delete` now look reviews up through it, so customers still
+    get a 404 on anyone else's review.
+  - `Review.save_edit(editor)` takes the person editing. A staff edit
+    clears the flag; an author's edit is re-checked for banned words as
+    before. The author and saved `display_name` never change.
+  - The review card shows Edit and Delete to the author or any staff
+    member. Staff see "Delete this review?" and "Edit this review"
+    instead of "your review".
+  - New staff-only back-office pages `reviews:manage_edit` (an
+    `UpdateView` that saves through `save_edit`) and
+    `reviews:manage_delete` (a `DeleteView` with a confirmation page),
+    both redirecting to the Reviews tab with a success message. Each
+    Reviews tab row links to them.
+  - TDD on three behaviors, each RED on an assertion (two 404s and a
+    missing Edit link) before GREEN: a staff edit keeping the author and
+    clearing the flag, staff deleting any review while customers still
+    can't, and staff seeing Edit and Delete on every card. The back-office
+    pages were tested normally. To prove the back-office edit test could
+    fail, `save_edit` was briefly swapped for a plain `save()`; it went
+    RED and the code was restored.
+  - The suite went from 562 to 571, all passing; ruff check and format
+    are clean. No migration.
+- **Deviations:**
+  - The staff delete confirm text ("Delete this review?") was added to
+    behavior 3's test beyond the behavior first approved; the user
+    approved the test with it.
+  - Of the code review's 8 findings, the user chose to fix two: the back
+    office now says "No changes to “…”." instead of "saved" when nothing
+    changed (so staff aren't misled about a flag that stays), and both
+    back-office views use `select_related("product", "author")`. Kept as
+    is: a staff edit clears the flag even if a banned word remains (the
+    PRD and plan say a staff edit clears it), and back-office edit and
+    delete return to All, page 1 (the plan only asks for the Reviews tab).
+    The rest were checked and needed no change.
+- **Sideways:** The first full-suite run passed the two-minute foreground
+  limit and finished in the background; later runs went to the
+  background from the start. The user's browser check said "phase six"
+  but meant this phase; Phase 6 (reports) has not been started.
+
 ## 2026-10-28 — Build Phase 4 of product reviews (banned-word flag and the Reviews tab)
 
 ### Prompts

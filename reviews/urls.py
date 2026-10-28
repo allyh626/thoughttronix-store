@@ -24,6 +24,16 @@ urlpatterns = [
         name="manage",
     ),
     path(
+        "backoffice/reviews/<int:pk>/edit/",
+        views.ManageReviewUpdateView.as_view(),
+        name="manage_edit",
+    ),
+    path(
+        "backoffice/reviews/<int:pk>/delete/",
+        views.ManageReviewDeleteView.as_view(),
+        name="manage_delete",
+    ),
+    path(
         "backoffice/reviews/<int:pk>/clear-flag/",
         views.ClearFlagView.as_view(),
         name="clear_flag",
