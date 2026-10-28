@@ -197,18 +197,18 @@ message.
 
 ### Acceptance criteria
 
-- [ ] The banned-word constant exists, and the check flags reviews on
+- [x] The banned-word constant exists, and the check flags reviews on
       create and on customer edit, matching words regardless of case
-- [ ] A clean customer edit does not clear an existing flag
-- [ ] `reviews:manage` is staff-only and lists all reviews flagged first,
+- [x] A clean customer edit does not clear an existing flag
+- [x] `reviews:manage` is staff-only and lists all reviews flagged first,
       then newest first
-- [ ] The Flagged tab shows only flagged reviews
-- [ ] Rows show the full username, and a "Deactivated account" badge for
+- [x] The Flagged tab shows only flagged reviews
+- [x] Rows show the full username, and a "Deactivated account" badge for
       deactivated authors
-- [ ] `reviews:clear_flag` is staff-only, POST only, clears the flag, and
+- [x] `reviews:clear_flag` is staff-only, POST only, clears the flag, and
       redirects back with a success message
-- [ ] The Reviews tab link appears in the back-office tab bar
-- [ ] Tests cover all of the above
+- [x] The Reviews tab link appears in the back-office tab bar
+- [x] Tests cover all of the above
 
 ---
 

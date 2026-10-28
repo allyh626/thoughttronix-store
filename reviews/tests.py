@@ -666,6 +666,234 @@ def test_delete_without_a_delivered_order_shows_the_hint(client, customer, produ
     assert "No reviews yet." in page
 
 
+# --- Banned words flag a review ----------------------------------------------
+
+
+@pytest.mark.parametrize("field", ["title", "comment"])
+def test_a_banned_word_flags_the_review_on_create_and_on_edit(
+    client, customer, other_customer, product, field
+):
+    _order(customer, product)
+    client.force_login(customer)
+    client.post(
+        reverse("reviews:create", kwargs={"pk": product.pk}),
+        {**VALID_REVIEW, field: "Total SCAM, sadly."},
+    )
+    assert Review.objects.get(author=customer).is_flagged
+
+    clean = _review(product, other_customer)
+    client.force_login(other_customer)
+    client.post(
+        reverse("reviews:edit", kwargs={"pk": clean.pk}),
+        {**VALID_REVIEW, field: "What a Scam."},
+    )
+    clean.refresh_from_db()
+    assert clean.is_flagged
+
+
+@pytest.mark.parametrize(
+    ("comment", "flagged"),
+    [
+        ("Total scams, all of them.", True),
+        ("A scammy little gadget.", True),
+        ("Run by scammers.", True),
+        ("I got scammed.", True),
+        ("Crappy battery.", True),
+        ("An idiotic design.", True),
+        ("Pure stupidity.", True),
+        ("Damned if I know.", True),
+        ("They are scamming people.", True),
+        ("Pure idiocy.", True),
+        ("It works stupidly.", True),
+        ("It made my cat scamper off.", False),
+        ("It only suggests scampi recipes.", False),
+    ],
+)
+def test_banned_word_variants_flag_but_lookalikes_do_not(
+    customer, product, comment, flagged
+):
+    review = _review(product, customer, comment=comment)
+
+    assert review.is_flagged is flagged
+
+
+def test_a_clean_customer_edit_keeps_an_existing_flag(client, customer, product):
+    review = _review(product, customer, comment="Honestly a scam.")
+    client.force_login(customer)
+
+    client.post(
+        reverse("reviews:edit", kwargs={"pk": review.pk}),
+        {**VALID_REVIEW, "comment": "Honestly fine."},
+    )
+
+    review.refresh_from_db()
+    assert review.comment == "Honestly fine."
+    assert review.is_flagged
+
+
+# --- The back-office Reviews tab --------------------------------------------
+
+
+def test_reviews_tab_lists_flagged_first_then_newest_first(client, staff_user, product):
+    User = get_user_model()
+    now = timezone.now()
+    reviews = {}
+    for name, days_ago, flagged in [
+        ("old-flagged", 3, True),
+        ("new-clean", 0, False),
+        ("new-flagged", 1, True),
+        ("old-clean", 2, False),
+    ]:
+        author = User.objects.create_user(username=name, password="pw")
+        reviews[name] = _review(
+            product,
+            author,
+            title=name,
+            created_at=now - timedelta(days=days_ago),
+            is_flagged=flagged,
+        )
+    client.force_login(staff_user)
+
+    response = client.get(reverse("reviews:manage"))
+
+    assert list(response.context["reviews"]) == [
+        reviews["new-flagged"],
+        reviews["old-flagged"],
+        reviews["new-clean"],
+        reviews["old-clean"],
+    ]
+
+
+def _manage_requests(review):
+    """Each back-office review endpoint, with the method it accepts."""
+    return [
+        ("get", reverse("reviews:manage")),
+        ("post", reverse("reviews:clear_flag", kwargs={"pk": review.pk})),
+    ]
+
+
+def test_reviews_tab_sends_anonymous_users_to_login(client, customer, product):
+    review = _review(product, customer, is_flagged=True)
+
+    for method, url in _manage_requests(review):
+        response = getattr(client, method)(url)
+
+        assert response.status_code == HTTPStatus.FOUND, url
+        assert reverse("accounts:login") in response.url
+    review.refresh_from_db()
+    assert review.is_flagged
+
+
+def test_reviews_tab_refuses_customers(client, customer, product):
+    review = _review(product, customer, is_flagged=True)
+    client.force_login(customer)
+
+    for method, url in _manage_requests(review):
+        assert getattr(client, method)(url).status_code == HTTPStatus.FORBIDDEN, url
+    review.refresh_from_db()
+    assert review.is_flagged
+
+
+def test_flagged_filter_shows_only_flagged_reviews(
+    client, staff_user, customer, other_customer, product
+):
+    _review(product, customer, title="Flagged one", is_flagged=True)
+    _review(product, other_customer, title="Clean one")
+    client.force_login(staff_user)
+
+    response = client.get(reverse("reviews:manage"), {"filter": "flagged"})
+
+    assert [review.title for review in response.context["reviews"]] == ["Flagged one"]
+    assert "Clean one" not in response.content.decode()
+
+
+def test_flagged_filter_has_an_empty_state(client, staff_user, customer, product):
+    _review(product, customer)
+    client.force_login(staff_user)
+
+    page = client.get(reverse("reviews:manage"), {"filter": "flagged"}).content.decode()
+
+    assert "No flagged reviews" in page
+
+
+def test_unknown_filter_shows_all_reviews(client, staff_user, customer, product):
+    _review(product, customer, title="Clean one")
+    client.force_login(staff_user)
+
+    response = client.get(reverse("reviews:manage"), {"filter": "teleported"})
+
+    assert response.context["active_filter"] == ""
+    assert "Clean one" in response.content.decode()
+
+
+def test_reviews_tab_shows_the_comment_that_was_flagged(
+    client, staff_user, customer, product
+):
+    _review(product, customer, title="Great hub", comment="Honestly a scam.")
+    client.force_login(staff_user)
+
+    page = client.get(reverse("reviews:manage")).content.decode()
+
+    assert "Great hub" in page and "Honestly a scam." in page
+
+
+def test_reviews_tab_shows_full_usernames_and_marks_deactivated_authors(
+    client, staff_user, customer, other_customer, product
+):
+    _review(product, customer)
+    _review(product, other_customer)
+    other_customer.deactivate()
+    client.force_login(staff_user)
+
+    page = client.get(reverse("reviews:manage")).content.decode()
+
+    assert customer.username in page
+    assert f"deleted-user-{other_customer.pk}" in page
+    assert page.count("Deactivated account") == 1
+    assert "c****r" not in page
+
+
+def test_clear_flag_clears_it_and_redirects_back_with_a_message(
+    client, staff_user, customer, product
+):
+    review = _review(product, customer, title="Was it a scam", is_flagged=True)
+    client.force_login(staff_user)
+    url = reverse("reviews:clear_flag", kwargs={"pk": review.pk})
+
+    response = client.post(url, {"filter": "flagged"})
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.url == f"{reverse('reviews:manage')}?filter=flagged"
+    review.refresh_from_db()
+    assert not review.is_flagged
+    assert review.edited_at is None
+    page = client.get(response.url).content.decode()
+    assert "Flag cleared on “Was it a scam”." in page
+
+
+def test_clear_flag_is_post_only(client, staff_user, customer, product):
+    review = _review(product, customer, is_flagged=True)
+    client.force_login(staff_user)
+
+    response = client.get(reverse("reviews:clear_flag", kwargs={"pk": review.pk}))
+
+    assert response.status_code == HTTPStatus.METHOD_NOT_ALLOWED
+    review.refresh_from_db()
+    assert review.is_flagged
+
+
+def test_reviews_tab_is_in_the_back_office_tab_bar(client, staff_user):
+    client.force_login(staff_user)
+
+    orders_page = client.get(reverse("orders:manage_orders")).content.decode()
+    reviews_page = client.get(reverse("reviews:manage")).content.decode()
+
+    assert f'href="{reverse("reviews:manage")}">Reviews</a>' in orders_page
+    assert re.search(
+        r'class="tab tab-active"\s+href="/backoffice/reviews/"', reviews_page
+    )
+
+
 # --- Reviews outlive orders and accounts, not products ----------------------
 
 

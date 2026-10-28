@@ -1,3 +1,4 @@
+import re
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.conf import settings
@@ -15,6 +16,29 @@ def censor(username: str) -> str:
     return f"{username[0]}****{username[-1]}"
 
 
+# Words that flag a review for staff to look at. Edit the list here; there
+# is no back-office screen for it. Matching is by whole word, so each
+# variant is listed — that keeps lookalikes such as "scampi" unflagged.
+BANNED_WORDS = {
+    *("crap", "crappy"),
+    *("damn", "damned", "damnit", "dammit"),
+    *("idiot", "idiots", "idiotic", "idiocy"),
+    *("scam", "scams", "scammed", "scammer", "scammers", "scamming", "scammy"),
+    *("stupid", "stupidity", "stupidly"),
+}
+
+_BANNED_PATTERN = re.compile(
+    r"\b(?:" + "|".join(map(re.escape, sorted(BANNED_WORDS))) + r")\b",
+    re.IGNORECASE,
+)
+
+
+def contains_banned_word(text: str) -> bool:
+    """Whether the text has a banned word in it, as a whole word, in any
+    letter case."""
+    return bool(_BANNED_PATTERN.search(text))
+
+
 class ReviewQuerySet(models.QuerySet):
     # Reviews per page on the product page; "Show more" loads the next page.
     PAGE_SIZE = 5
@@ -28,6 +52,11 @@ class ReviewQuerySet(models.QuerySet):
         """
         others = self.exclude(author=user) if user.is_authenticated else self
         return others.order_by("-created_at", "-pk")
+
+    def for_moderation(self):
+        """The back office's order: flagged reviews first, so staff deal
+        with problems before anything else, then newest first."""
+        return self.order_by("-is_flagged", "-created_at", "-pk")
 
     def rating_summary(self) -> dict:
         """The average rating, rounded half up to one decimal place, and
@@ -118,10 +147,25 @@ class Review(models.Model):
     def save(self, *args, **kwargs):
         if self._state.adding:
             self.display_name = censor(self.author.username)
+            self._flag_if_banned()
         super().save(*args, **kwargs)
 
     def save_edit(self):
-        """Save a change to an existing review and mark it edited, which
-        shows the "edited" tag. No Delivered order is needed to edit."""
+        """Save the author's change to their review and mark it edited,
+        which shows the "edited" tag. No Delivered order is needed to edit.
+
+        The edit is re-checked for banned words; a clean edit leaves an
+        existing flag alone, since only staff clear flags."""
         self.edited_at = timezone.now()
+        self._flag_if_banned()
         self.save()
+
+    def clear_flag(self):
+        """Staff have checked the review: it leaves the flagged list. Not an
+        edit, so no "edited" tag."""
+        self.is_flagged = False
+        self.save(update_fields=["is_flagged"])
+
+    def _flag_if_banned(self):
+        if contains_banned_word(f"{self.title}\n{self.comment}"):
+            self.is_flagged = True

@@ -1,0 +1,113 @@
+{% extends "backoffice/base.html" %}
+
+{% block title %}Reviews — Back office{% endblock %}
+
+{# Staff see the author's full username, never the censored public name. #}
+{% block backoffice %}
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
+    <h2 class="text-xl font-semibold">
+      {{ page_obj.paginator.count }} review{{ page_obj.paginator.count|pluralize }}
+    </h2>
+    <div class="flex flex-wrap items-center gap-2 text-sm">
+      <span class="opacity-60">Show:</span>
+      <a href="{% querystring filter=None page=None %}"
+         class="badge {% if not active_filter %}badge-primary{% else %}badge-ghost{% endif %}">all</a>
+      <a href="{% querystring filter='flagged' page=None %}"
+         class="badge {% if active_filter == 'flagged' %}badge-primary{% else %}badge-ghost{% endif %}">flagged</a>
+    </div>
+  </div>
+
+  {% if reviews %}
+    <div class="overflow-x-auto rounded-box bg-base-100 shadow-md">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Author</th>
+            <th>Rating</th>
+            <th>Review</th>
+            <th>Flag</th>
+            <th>Posted</th>
+            <th class="text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for review in reviews %}
+            <tr>
+              <td>
+                <a href="{{ review.product.get_absolute_url }}"
+                   class="link-hover font-semibold">{{ review.product.name }}</a>
+              </td>
+              <td class="whitespace-nowrap">
+                {{ review.author.username }}
+                {% if not review.author.is_active %}
+                  <span class="badge badge-warning badge-outline badge-sm">Deactivated account</span>
+                {% endif %}
+              </td>
+              <td class="whitespace-nowrap text-warning"
+                  aria-label="{{ review.rating }} out of 5 stars">{% for star in "12345" %}{% if forloop.counter <= review.rating %}★{% else %}☆{% endif %}{% endfor %}</td>
+              <td>
+                <p class="font-semibold">{{ review.title }}</p>
+                <p class="text-sm opacity-70">{{ review.comment|truncatechars:80 }}</p>
+              </td>
+              <td>
+                {% if review.is_flagged %}
+                  <span class="badge badge-error badge-outline">Flagged</span>
+                {% else %}
+                  <span class="badge badge-ghost">Clear</span>
+                {% endif %}
+              </td>
+              <td class="whitespace-nowrap">{{ review.created_at|date:"M j, Y" }}</td>
+              <td class="whitespace-nowrap text-right">
+                {% if review.is_flagged %}
+                  <form method="post"
+                        action="{% url 'reviews:clear_flag' review.pk %}"
+                        class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="filter" value="{{ active_filter }}">
+                    <button type="submit" class="btn btn-ghost btn-xs">Clear flag</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if is_paginated %}
+      <div class="mt-8 flex justify-center">
+        <div class="join">
+          {% if page_obj.has_previous %}
+            <a href="{% querystring page=page_obj.previous_page_number %}" class="btn join-item">«</a>
+          {% else %}
+            <button class="btn join-item btn-disabled">«</button>
+          {% endif %}
+          <button class="btn join-item pointer-events-none">
+            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+          </button>
+          {% if page_obj.has_next %}
+            <a href="{% querystring page=page_obj.next_page_number %}" class="btn join-item">»</a>
+          {% else %}
+            <button class="btn join-item btn-disabled">»</button>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+  {% else %}
+    <div class="py-16 text-center">
+      {% if active_filter %}
+        <p class="text-5xl">✅</p>
+        <p class="mt-4 text-xl font-semibold">No flagged reviews</p>
+        <p class="mt-2 opacity-70">Every thought out there is a polite one.</p>
+        <a href="{% querystring filter=None page=None %}" class="btn btn-primary btn-sm mt-6">
+          Show all reviews
+        </a>
+      {% else %}
+        <p class="text-5xl">⭐</p>
+        <p class="mt-4 text-xl font-semibold">No reviews yet</p>
+        <p class="mt-2 opacity-70">Nobody has shared a thought about our thoughts.</p>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endblock %}

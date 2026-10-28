@@ -4,12 +4,16 @@ HTMX endpoints render partials from ``reviews/partials/`` (never
 ``base.html``).
 """
 
+from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
 from django.http import HttpResponseForbidden
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views import View
+from django.views.generic import ListView
 
+from accounts.mixins import StaffRequiredMixin
 from products.models import Product
 
 from .forms import ReviewForm
@@ -130,3 +134,49 @@ class DeleteReviewView(LoginRequiredMixin, View):
                 "form": ReviewForm() if prompt == "form" else None,
             },
         )
+
+
+# --- The back office --------------------------------------------------------
+#
+# Staff-only oversight of every review, with the full username the product
+# page never shows. The ``section`` context entry drives the active tab.
+
+
+class ManageReviewListView(StaffRequiredMixin, ListView):
+    """Every review, flagged first, filterable via ``?filter=flagged``."""
+
+    template_name = "reviews/manage_reviews.html"
+    context_object_name = "reviews"
+    paginate_by = 20
+    extra_context = {"section": "reviews"}
+
+    def _active_filter(self):
+        """``"flagged"`` or ``""`` (All) — an unknown value means All."""
+        return "flagged" if self.request.GET.get("filter") == "flagged" else ""
+
+    def get_queryset(self):
+        reviews = Review.objects.select_related("product", "author").for_moderation()
+        if self._active_filter():
+            reviews = reviews.filter(is_flagged=True)
+        return reviews
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["active_filter"] = self._active_filter()
+        return context
+
+
+class ClearFlagView(StaffRequiredMixin, View):
+    """POST-only: staff have checked a flagged review and it's fine.
+
+    Redirects back to the filter tab the form was on.
+    """
+
+    def post(self, request, pk):
+        review = get_object_or_404(Review, pk=pk)
+        review.clear_flag()
+        messages.success(request, f"Flag cleared on “{review.title}”.")
+        url = reverse("reviews:manage")
+        if request.POST.get("filter") == "flagged":
+            url += "?filter=flagged"
+        return redirect(url)

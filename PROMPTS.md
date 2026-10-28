@@ -28,6 +28,87 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-28 — Build Phase 4 of product reviews (banned-word flag and the Reviews tab)
+
+### Prompts
+1. /implement @prd/product-reviews.md @plans/product-reviews.md implement phase 4
+2. yes thats alright to proceed
+3. yes go ahead and make it pass
+4. how would you loosen the match?
+5. you you make the test stricter with option c
+6. yes
+7. yes you can go ahead
+8. yes go ahead and make it pass
+9. okay proceed
+10. can you check the "flag cleared on.." message is actually being displayed when it should? i dont believe this showed in my manual broswer test
+11. yes could you add the fix and double check it
+12. yes commit and push it
+
+### Summary
+- **Outcome:** Built Phase 4 of `plans/product-reviews.md`:
+  - `BANNED_WORDS` (a constant in `reviews/models.py`) and
+    `contains_banned_word()`. Matching is by whole word, in any letter
+    case, with each variant listed (scams, scammy, idiotic, and so on).
+    `Review.save()` checks new reviews, and `save_edit()` checks every
+    customer edit. The check only ever turns the flag on, so a clean edit
+    keeps an existing flag.
+  - `ReviewQuerySet.for_moderation()` (flagged first, then newest first)
+    and `Review.clear_flag()`, which saves only `is_flagged`, so it adds
+    no "edited" tag.
+  - New staff-only views: `reviews:manage` (`/backoffice/reviews/`, All
+    and Flagged filters, 20 per page) and `reviews:clear_flag` (POST only;
+    redirects back to the same filter with a success message). Rows show
+    the product, the full username with a "Deactivated account" badge,
+    stars, the title with a shortened comment, the flag, and the date. A
+    Reviews tab sits between Coupons and Dashboard in the back-office tab
+    bar.
+  - TDD on three behaviors, each RED on an assertion before GREEN: the
+    banned-word flag on create and edit, a clean edit keeping the flag,
+    and the Reviews tab's ordering. The clean-edit test passed on its
+    first run, because the flag code already only turned the flag on. To
+    prove it could fail, the naive `is_flagged = contains_banned_word(...)`
+    was put in briefly; the test went RED, and the code was restored.
+  - 14 new test functions (27 cases with parameters). The suite went from
+    534 to 561, all passing; ruff check and format are clean; Django's
+    check and `makemigrations --check` are clean (no new migration).
+  - Fixed a site-wide styling bug that the user's browser test exposed:
+    `assets/css/source.css` now lists every message alert class with
+    `@source inline(...)`.
+- **Deviations:** The user asked how the whole-word match could be
+  loosened. I offered three options and recommended B (match the start of
+  a word). The user chose C instead: keep whole words, list each variant,
+  and make the test stricter. That test also checks that lookalikes
+  ("scamper", "scampi") are not flagged. The user then reported that the
+  "Flag cleared" message didn't seem to show in the browser, and asked
+  for it to be checked and fixed.
+- **Sideways:**
+  - The code review raised 7 findings, and I fixed 3: more variants
+    ("scamming", "idiocy", "stupidly"), an unknown `?filter=` now acts as
+    All, and rows now show a shortened comment so staff can see why a
+    review was flagged. Left alone: keeping the page number after Clear
+    flag (it could redirect to a page that no longer exists and give a
+    404), staff clearing a flag the author re-triggered seconds earlier,
+    a duplicate "Flag cleared" message when two staff clear the same
+    review, and a stems-plus-allow-list design (the user chose option C).
+  - Still open for Phase 6: customer edits save the whole review, so a
+    report that flags a review while its author has the edit form open
+    would be undone by the save.
+  - The "Flag cleared" message was really sent (the user's database
+    showed both test flags cleared). But `base.html` builds the class as
+    `alert-{{ message.tags }}`, so Tailwind never saw `alert-success` and
+    never generated it. The message showed as an unstyled `alert` that
+    blends into the night theme. This bug predates the reviews feature
+    and affected every success and info message. My tests passed because
+    they check the message text, not its styling, so only the user's
+    browser test caught it. It was checked end to end against a dev
+    server running on a scratch copy of the database.
+  - Smaller slips: one database query of mine used `union()`, which
+    SQLite refuses with the model's default ordering, so I rewrote it
+    with `Q`. `grep` treated output containing curly quotes as binary.
+    `tailwind build` said the stylesheet was up to date, so it needed
+    `--force`. `ruff format` re-wrapped the new tests. As before, `uv run`
+    printed the harmless `VIRTUAL_ENV` mismatch warning.
+
 ## 2026-10-26 — Build Phase 3 of product reviews (edit and delete your own review)
 
 ### Prompts
