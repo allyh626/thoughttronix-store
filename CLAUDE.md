@@ -1,7 +1,8 @@
 # CLAUDE.md — The ThoughtTronix Store
 
 A server-rendered Django 6 storefront and back office. The PRD (`prd/core-platform.md`) and the plan (`plans/core-platform.md`) record how the core platform was designed and built; `prd/account-security-center.md` and `plans/account-security-center.md` do the same for the Account Security Center,
-and `prd/wishlist.md` and `plans/wishlist.md` for the customer wishlist.
+`prd/wishlist.md` and `plans/wishlist.md` for the customer wishlist, and
+`prd/product-reviews.md` and `plans/product-reviews.md` for product reviews.
 
 ## Commands
 
@@ -45,6 +46,15 @@ and `prd/wishlist.md` and `plans/wishlist.md` for the customer wishlist.
   HTMX add/remove button on the product detail page, an out-of-band navbar
   count badge fed by the `wishlist` context processor, and the My wishlist
   page. Every view reaches data only through `request.user`'s wishlist.
+- `reviews/` — product reviews (`Review`, one per customer per product,
+  with the censored `display_name` saved on create; `ReviewReport`, one per
+  customer per review). Only a customer with a Delivered order of the
+  product may write one. The `{% review_section product %}` tag places the
+  HTMX reviews block on the product page (write, edit, delete, report,
+  "Show more"); customers reach only their own reviews, staff any. Banned
+  words (`BANNED_WORDS`, a constant) and any report flag a review; the
+  back-office Reviews tab lists flagged first, where staff edit, delete,
+  and clear flags.
 - `dashboard/` — the staff analytics dashboard
 - `PROMPTS.md` — the AI-usage log; append entries, never rewrite history
 - `templates/` — project-level templates (`base.html`); app templates live in

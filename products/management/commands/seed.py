@@ -9,8 +9,9 @@ Demo logins (documented in the README):
     admin / admin123        superuser
     employee / employee123  staff, "Junior Thought Curator"
     customer / customer123  a plain customer, with order history, a live cart,
-                            a four-item wishlist, two saved addresses, and a
-                            review of MindSync
+                            a four-item wishlist, two saved addresses, a
+                            review of MindSync, and a report of another
+                            MindSync review
 """
 
 import random
@@ -25,6 +26,7 @@ from django.core.exceptions import ValidationError
 from django.core.files import File
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.template.defaultfilters import pluralize
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -32,7 +34,7 @@ from accounts.models import Address, SignInAttempt
 from orders.models import Cart, Coupon, Order, OrderItem
 from products.models import Category, Product, Tag
 from products.validators import validate_product_image
-from reviews.models import Review
+from reviews.models import Review, ReviewReport
 from wishlist.models import Wishlist
 
 # Product photos, one per slug (products/seed_images/<slug>.png). A product
@@ -633,6 +635,17 @@ DEMO_REVIEWS = [
     ),
 ]
 
+# The demo report: (product slug, review author, reporter, reason, note).
+# It flags that review, so the Flagged tab has a row, and 'customer' sees
+# "Reported" on it from the start.
+DEMO_REPORT = (
+    "mindsync",
+    "snakamura",
+    "customer",
+    ReviewReport.Reason.OFF_TOPIC,
+    "This is about their pantry, not the headband.",
+)
+
 # Shipping addresses for the background orders. US-only, like checkout.
 SEED_ADDRESSES = [
     ("214 Synapse Street", "Canyon", "TX", "79015"),
@@ -689,6 +702,7 @@ class Command(BaseCommand):
         self._create_coupons()
         self._create_reviews()
 
+        reports = ReviewReport.objects.count()
         self.stdout.write(
             self.style.SUCCESS(
                 f"Seeded {Category.objects.count()} categories, "
@@ -698,6 +712,7 @@ class Command(BaseCommand):
                 f"{Order.objects.count()} orders, "
                 f"{Coupon.objects.count()} coupons, "
                 f"{Review.objects.count()} reviews, "
+                f"{reports} review report{pluralize(reports)}, "
                 f"and a live cart, {len(CUSTOMER_WISHLIST)} wishlist items, "
                 f"and {Address.objects.count()} saved addresses for 'customer'."
             )
@@ -940,6 +955,19 @@ class Command(BaseCommand):
                 comment=comment,
                 created_at=delivered.created_at + timedelta(days=days_after),
             )
+
+        slug, author, reporter, reason, note = DEMO_REPORT
+        review = Review.objects.get(product__slug=slug, author__username=author)
+        reporter = User.objects.get(username=reporter)
+        if not review.can_be_reported_by(reporter):
+            raise CommandError(f"Demo report by {reporter} isn't allowed.")
+        ReviewReport.objects.create(  # flags the review
+            review=review,
+            reporter=reporter,
+            reason=reason,
+            note=note,
+            created_at=review.created_at + timedelta(days=1),
+        )
 
     def _build_order(self, *, user, created_at, status, lines, rng):
         """One order with denormalized addresses and purchase-time prices."""

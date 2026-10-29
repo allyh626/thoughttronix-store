@@ -27,6 +27,7 @@
             <th>Rating</th>
             <th>Review</th>
             <th>Flag</th>
+            <th>Reports</th>
             <th>Posted</th>
             <th class="text-right">Actions</th>
           </tr>
@@ -56,6 +57,20 @@
                 {% else %}
                   <span class="badge badge-ghost">Clear</span>
                 {% endif %}
+              </td>
+              <td class="min-w-40">
+                {% with reports=review.reports.all %}
+                  {% if reports %}
+                    <p class="font-semibold">{{ reports|length }} report{{ reports|length|pluralize }}</p>
+                    <ul class="text-sm opacity-70">
+                      {% for report in reports %}
+                        <li>{{ report.get_reason_display }}{% if report.note %}: “{{ report.note|truncatechars:60 }}”{% endif %}</li>
+                      {% endfor %}
+                    </ul>
+                  {% else %}
+                    <span class="opacity-50">—</span>
+                  {% endif %}
+                {% endwith %}
               </td>
               <td class="whitespace-nowrap">{{ review.created_at|date:"M j, Y" }}</td>
               <td class="whitespace-nowrap text-right">

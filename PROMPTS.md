@@ -28,6 +28,61 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-29 — Build Phase 6 of product reviews (report a review)
+
+### Prompts
+1. /implement @prd/product-reviews.md @plans/product-reviews.md implement phase 6
+2. yes i believe those are valid bahviors for tdd
+3. yes that test looks right, go ahead
+4. yes you can move onto the next behavior
+5. yes that test looks right, go ahead
+6. yes you can move onto the next behavior
+7. yes that test looks right, go ahead
+8. yes you can move onto the rest of the phase
+9. yes it passed my manual tests in the broswer
+
+### Summary
+- **Outcome:** Built Phase 6 of `plans/product-reviews.md`, the last
+  phase of product reviews:
+  - `ReviewReport` model (migration `0002_reviewreport`): reason choices
+    Spam / Offensive language / Off-topic / Other, an optional note, and a
+    unique review–reporter pair. Saving a new report flags its review
+    (`Review.flag()`), in one transaction with the report.
+  - `Review.can_be_reported_by(user)`: signed in, not staff, not the
+    author, not already reported. `ReviewReportForm.clean()` requires a
+    note only for Other.
+  - `reviews:report` (`ReportReviewView`): GET swaps the Report button for
+    the form in place, POST swaps in "Reported"; anyone not allowed gets
+    403, anonymous users go to login. A simultaneous duplicate report
+    answers "Reported" instead of a 500.
+  - `ReviewQuerySet.with_reported_by(user)` marks each review the viewer
+    already reported, so cards (first page, "Show more", Cancel) show
+    "Reported" on load.
+  - The back-office Reviews tab has a Reports column (count, reasons,
+    notes). `seed` adds a demo report ('customer' reports snakamura's
+    MindSync review as Off-topic), which flags it. CLAUDE.md gained the
+    `reviews/` entry and the reviews PRD/plan pair.
+  - TDD on three behaviors, each RED on an assertion before GREEN: a
+    report flagging the review and a new reporter re-flagging a cleared
+    one; the note required only for Other; the view refusing the author,
+    staff, and a second report. 16 more tests written normally. Suite at
+    591 passed; ruff check and format clean. Checked in the browser by
+    the user.
+- **Deviations:** None from the recommendations; every TDD behavior and
+  test was approved as proposed. The opening question about edit mode
+  (explain each edit before making it, as in earlier phases) wasn't
+  answered directly, so that mode was kept.
+- **Sideways:** While adding the permission check, an empty `dispatch`
+  override slipped into the view; it was spotted and removed before the
+  test run. A new "Show more" test first picked the newest review as the
+  "oldest"; caught on review and fixed before running. Code review raised
+  8 findings: fixed 3 (the duplicate-report 500, report and flag saved
+  atomically, the seed summary's plural), skipped 5 as style/design or
+  contrary to the plan (403 not swapped by HTMX, annotation placement,
+  repeated rule in the card template, repeated 403 check, cleared reviews
+  still listing old reports). As before, `uv run` printed the harmless
+  `VIRTUAL_ENV` mismatch warning.
+
 ## 2026-10-28 — Build Phase 5 of product reviews (staff edit and delete any review)
 
 ### Prompts

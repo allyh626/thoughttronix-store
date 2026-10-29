@@ -8,6 +8,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.paginator import Paginator
+from django.db import IntegrityError
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
@@ -17,7 +18,7 @@ from django.views.generic import DeleteView, ListView, UpdateView
 from accounts.mixins import StaffRequiredMixin
 from products.models import Product
 
-from .forms import ReviewForm
+from .forms import ReviewForm, ReviewReportForm
 from .models import Review, ReviewQuerySet
 
 
@@ -70,10 +71,11 @@ class MoreReviewsView(View):
 
 
 class ReviewCardView(View):
-    """HTMX: one review card — what Cancel on the edit form swaps back."""
+    """HTMX: one review card — what Cancel on the edit and report forms
+    swaps back."""
 
     def get(self, request, pk):
-        review = get_object_or_404(Review, pk=pk)
+        review = get_object_or_404(Review.objects.with_reported_by(request.user), pk=pk)
         return render(request, "reviews/partials/_card.html", {"review": review})
 
 
@@ -137,6 +139,53 @@ class DeleteReviewView(LoginRequiredMixin, View):
         )
 
 
+class ReportReviewView(LoginRequiredMixin, View):
+    """HTMX: report someone else's review.
+
+    GET swaps the Report button for the reason and note form; a valid POST
+    flags the review and swaps in "Reported". Errors re-render the form.
+    """
+
+    def _form(self, review, data=None):
+        # Ids unique per review, so two open report forms never clash.
+        return ReviewReportForm(data, auto_id=f"id_report_{review.pk}_%s")
+
+    def _review(self, request, pk):
+        """The review, or ``None`` when this user may not report it."""
+        review = get_object_or_404(Review, pk=pk)
+        return review if review.can_be_reported_by(request.user) else None
+
+    def get(self, request, pk):
+        review = self._review(request, pk)
+        if review is None:
+            return HttpResponseForbidden("You can't report this review.")
+        return render(
+            request,
+            "reviews/partials/_report_form.html",
+            {"review": review, "form": self._form(review)},
+        )
+
+    def post(self, request, pk):
+        review = self._review(request, pk)
+        if review is None:
+            return HttpResponseForbidden("You can't report this review.")
+        form = self._form(review, request.POST)
+        if not form.is_valid():
+            return render(
+                request,
+                "reviews/partials/_report_form.html",
+                {"review": review, "form": form},
+            )
+        report = form.save(commit=False)
+        report.review = review
+        report.reporter = request.user
+        try:
+            report.save()
+        except IntegrityError:
+            pass  # a simultaneous request already filed this customer's report
+        return render(request, "reviews/partials/_reported.html")
+
+
 # --- The back office --------------------------------------------------------
 #
 # Staff-only oversight of every review, with the full username the product
@@ -156,7 +205,11 @@ class ManageReviewListView(StaffRequiredMixin, ListView):
         return "flagged" if self.request.GET.get("filter") == "flagged" else ""
 
     def get_queryset(self):
-        reviews = Review.objects.select_related("product", "author").for_moderation()
+        reviews = (
+            Review.objects.select_related("product", "author")
+            .prefetch_related("reports")
+            .for_moderation()
+        )
         if self._active_filter():
             reviews = reviews.filter(is_flagged=True)
         return reviews

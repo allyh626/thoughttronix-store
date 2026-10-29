@@ -256,17 +256,17 @@ right after seeding.
 
 ### Acceptance criteria
 
-- [ ] `ReviewReport` and its migration exist, with the review–reporter
+- [x] `ReviewReport` and its migration exist, with the review–reporter
       pair unique
-- [ ] `reviews:report` requires sign-in, rejects the author and staff, and
+- [x] `reviews:report` requires sign-in, rejects the author and staff, and
       returns the "Reported" state in place
-- [ ] The form requires a note only for Other
-- [ ] A report flags the review; a second report by the same customer is
+- [x] The form requires a note only for Other
+- [x] A report flags the review; a second report by the same customer is
       refused; a new customer's report re-flags a cleared review
-- [ ] The Report button shows "Reported" on load for reviews the customer
+- [x] The Report button shows "Reported" on load for reviews the customer
       already reported
-- [ ] The Reviews tab shows report counts and reasons
-- [ ] `seed` creates a demo report that flags a demo review
-- [ ] CLAUDE.md gains a `reviews/` layout entry and lists the reviews PRD
+- [x] The Reviews tab shows report counts and reasons
+- [x] `seed` creates a demo report that flags a demo review
+- [x] CLAUDE.md gains a `reviews/` layout entry and lists the reviews PRD
       and plan pair
-- [ ] Tests cover all of the above
+- [x] Tests cover all of the above

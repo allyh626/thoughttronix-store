@@ -11,7 +11,8 @@ from django.utils import timezone
 
 from orders.models import Order, OrderItem
 
-from .models import Review
+from .forms import ReviewReportForm
+from .models import Review, ReviewReport
 
 
 def _order(user, product, status=Order.Status.DELIVERED):
@@ -1059,6 +1060,243 @@ def test_manage_delete_deletes_and_redirects_with_a_message(
     assert response.url == reverse("reviews:manage")
     assert not Review.objects.filter(pk=review.pk).exists()
     assert "“Going soon” deleted." in client.get(response.url).content.decode()
+
+
+# --- Report a review --------------------------------------------------------
+
+
+def test_a_report_flags_the_review_and_a_new_reporter_flags_it_again(
+    customer, other_customer, product
+):
+    review = _review(product, _other_customer())
+
+    ReviewReport.objects.create(
+        review=review, reporter=customer, reason=ReviewReport.Reason.SPAM
+    )
+    review.refresh_from_db()
+    assert review.is_flagged
+
+    review.clear_flag()
+    ReviewReport.objects.create(
+        review=review, reporter=other_customer, reason=ReviewReport.Reason.OFF_TOPIC
+    )
+    review.refresh_from_db()
+    assert review.is_flagged
+
+
+@pytest.mark.parametrize(
+    ("reason", "note", "valid"),
+    [
+        ("spam", "", True),
+        ("offensive", "", True),
+        ("off_topic", "", True),
+        ("other", "", False),
+        ("other", "   ", False),
+        ("other", "Links to a rival store.", True),
+    ],
+)
+def test_report_form_requires_a_note_only_for_other(reason, note, valid):
+    form = ReviewReportForm({"reason": reason, "note": note})
+
+    assert form.is_valid() is valid
+    if not valid:
+        assert "note" in form.errors
+
+
+def test_report_refuses_the_author_staff_and_a_second_report(
+    client, customer, staff_user, product
+):
+    review = _review(product, _other_customer())
+    url = reverse("reviews:report", kwargs={"pk": review.pk})
+
+    for user in (review.author, staff_user):
+        client.force_login(user)
+        assert client.post(url, {"reason": "spam"}).status_code == HTTPStatus.FORBIDDEN
+    assert not review.reports.exists()
+
+    client.force_login(customer)
+    response = client.post(url, {"reason": "spam"})
+
+    assert response.status_code == HTTPStatus.OK
+    assert "Reported" in response.content.decode()
+    assert review.reports.get().reporter == customer
+
+    again = client.post(url, {"reason": "offensive"})
+
+    assert again.status_code == HTTPStatus.FORBIDDEN
+    assert review.reports.count() == 1
+
+
+def test_a_simultaneous_second_report_says_reported_instead_of_crashing(
+    client, customer, product, monkeypatch
+):
+    review = _review(product, _other_customer())
+    ReviewReport.objects.create(
+        review=review, reporter=customer, reason=ReviewReport.Reason.SPAM
+    )
+    # Both requests passed the "already reported?" check before either saved.
+    monkeypatch.setattr(Review, "can_be_reported_by", lambda self, user: True)
+    client.force_login(customer)
+
+    response = client.post(
+        reverse("reviews:report", kwargs={"pk": review.pk}), {"reason": "spam"}
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert "Reported" in response.content.decode()
+    assert review.reports.count() == 1
+
+
+def test_report_get_returns_the_form_in_place(client, customer, product):
+    review = _review(product, _other_customer())
+    client.force_login(customer)
+
+    response = client.get(reverse("reviews:report", kwargs={"pk": review.pk}))
+
+    assert response.status_code == HTTPStatus.OK
+    page = response.content.decode()
+    assert "<html" not in page
+    for label in ("Spam", "Offensive language", "Off-topic", "Other"):
+        assert label in page
+    assert f'hx-get="{reverse("reviews:card", kwargs={"pk": review.pk})}"' in page
+    assert not review.reports.exists()
+
+
+def test_report_get_refuses_the_author(client, product):
+    author = _other_customer()
+    review = _review(product, author)
+    client.force_login(author)
+
+    response = client.get(reverse("reviews:report", kwargs={"pk": review.pk}))
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+def test_report_shows_errors_in_place(client, customer, product):
+    review = _review(product, _other_customer())
+    client.force_login(customer)
+
+    response = client.post(
+        reverse("reviews:report", kwargs={"pk": review.pk}), {"reason": "other"}
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert "Tell us what&#x27;s wrong when choosing Other." in response.content.decode()
+    assert not review.reports.exists()
+    review.refresh_from_db()
+    assert not review.is_flagged
+
+
+def test_anonymous_report_redirects_to_login(client, product):
+    review = _review(product, _other_customer())
+    url = reverse("reviews:report", kwargs={"pk": review.pk})
+
+    response = client.post(url, {"reason": "spam"})
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.url == f"{reverse('accounts:login')}?next={url}"
+    assert not review.reports.exists()
+
+
+def test_report_button_shows_only_on_other_customers_reviews(
+    client, customer, staff_user, product
+):
+    own = _review(product, customer)
+    other = _review(product, _other_customer())
+    own_url = reverse("reviews:report", kwargs={"pk": own.pk})
+    other_url = reverse("reviews:report", kwargs={"pk": other.pk})
+
+    anonymous_page = _detail(client, product)
+    client.force_login(staff_user)
+    staff_page = _detail(client, product)
+    client.force_login(customer)
+    customer_page = _detail(client, product)
+
+    assert other_url in customer_page and own_url not in customer_page
+    assert "/report/" not in anonymous_page
+    assert "/report/" not in staff_page
+
+
+def test_reported_shows_on_load_for_a_review_already_reported(
+    client, customer, product
+):
+    reported = _review(product, _other_customer())
+    unreported = _review(product, get_user_model().objects.create_user("nadia"))
+    ReviewReport.objects.create(
+        review=reported, reporter=customer, reason=ReviewReport.Reason.SPAM
+    )
+    client.force_login(customer)
+
+    page = _detail(client, product)
+    card = client.get(reverse("reviews:card", kwargs={"pk": reported.pk}))
+
+    assert reverse("reviews:report", kwargs={"pk": reported.pk}) not in page
+    assert reverse("reviews:report", kwargs={"pk": unreported.pk}) in page
+    assert page.count(">Reported<") == 1
+    assert ">Reported<" in card.content.decode()
+
+
+def test_show_more_marks_reviews_already_reported(client, customer, product):
+    reviews = _others(product, 6)
+    oldest = reviews[-1]
+    ReviewReport.objects.create(
+        review=oldest, reporter=customer, reason=ReviewReport.Reason.SPAM
+    )
+    client.force_login(customer)
+
+    response = client.get(
+        reverse("reviews:more", kwargs={"pk": product.pk}), {"page": 2}
+    )
+
+    page = response.content.decode()
+    assert f'id="review-{oldest.pk}"' in page
+    assert ">Reported<" in page
+
+
+def test_reviews_tab_shows_report_counts_and_reasons(
+    client, staff_user, customer, other_customer, product
+):
+    review = _review(product, _other_customer(), title="Reported one")
+    _review(product, get_user_model().objects.create_user("nadia"))
+    ReviewReport.objects.create(
+        review=review, reporter=customer, reason=ReviewReport.Reason.SPAM
+    )
+    ReviewReport.objects.create(
+        review=review,
+        reporter=other_customer,
+        reason=ReviewReport.Reason.OTHER,
+        note="Links to a rival store.",
+    )
+    client.force_login(staff_user)
+
+    page = client.get(reverse("reviews:manage")).content.decode()
+
+    assert "2 reports" in page
+    assert "Spam" in page
+    assert "Other: “Links to a rival store.”" in page
+
+
+def test_deleting_the_product_deletes_its_reviews_reports(customer, product):
+    review = _review(product, _other_customer())
+    ReviewReport.objects.create(
+        review=review, reporter=customer, reason=ReviewReport.Reason.SPAM
+    )
+
+    product.delete()
+
+    assert not ReviewReport.objects.exists()
+
+
+def test_review_reporter_pair_is_unique(customer, product):
+    review = _review(product, _other_customer())
+    ReviewReport.objects.create(
+        review=review, reporter=customer, reason=ReviewReport.Reason.SPAM
+    )
+
+    with pytest.raises(IntegrityError):
+        ReviewReport.objects.create(
+            review=review, reporter=customer, reason=ReviewReport.Reason.OFF_TOPIC
+        )
 
 
 # --- Reviews outlive orders and accounts, not products ----------------------

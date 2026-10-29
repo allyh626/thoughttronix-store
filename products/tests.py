@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.utils.html import escape
 
 from orders.models import CartItem, Order, OrderItem
-from reviews.models import Review
+from reviews.models import Review, ReviewReport
 from wishlist.models import Wishlist, WishlistItem
 
 from .models import Category, Product, Tag
@@ -271,6 +271,7 @@ def test_seed_is_idempotent(db, media_root):
         OrderItem.objects.count(),
         WishlistItem.objects.count(),
         Review.objects.count(),
+        ReviewReport.objects.count(),
     )
 
     call_command("seed")
@@ -284,6 +285,7 @@ def test_seed_is_idempotent(db, media_root):
         OrderItem.objects.count(),
         WishlistItem.objects.count(),
         Review.objects.count(),
+        ReviewReport.objects.count(),
     )
 
     assert first == second
@@ -329,3 +331,16 @@ def test_seed_creates_demo_reviews_backed_by_delivered_orders(
 
     assert not Review.objects.filter(title="Not seeded").exists()
     assert Review.objects.count() == len(reviews)
+
+
+def test_seed_creates_a_demo_report_that_flags_a_demo_review(db, media_root):
+    out = io.StringIO()
+    call_command("seed", stdout=out)
+
+    report = ReviewReport.objects.select_related("review", "reporter").get()
+    assert report.reporter.username == "customer"
+    assert report.review.author != report.reporter
+    assert report.review.is_flagged
+    assert report.created_at < timezone.now()
+    assert Review.objects.filter(is_flagged=True).get() == report.review
+    assert "1 review report" in out.getvalue()

@@ -3,7 +3,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 from orders.models import Order
@@ -51,7 +51,18 @@ class ReviewQuerySet(models.QuerySet):
         repeats reviews posted at the same moment.
         """
         others = self.exclude(author=user) if user.is_authenticated else self
-        return others.order_by("-created_at", "-pk")
+        return others.with_reported_by(user).order_by("-created_at", "-pk")
+
+    def with_reported_by(self, user):
+        """Mark each review ``reported_by_viewer`` — whether this user has
+        reported it — so its card shows "Reported" instead of Report."""
+        if not user.is_authenticated:
+            return self.annotate(reported_by_viewer=models.Value(False))
+        return self.annotate(
+            reported_by_viewer=models.Exists(
+                ReviewReport.objects.filter(review=models.OuterRef("pk"), reporter=user)
+            )
+        )
 
     def editable_by(self, user):
         """The reviews this user may edit or delete: staff any of them, a
@@ -170,6 +181,22 @@ class Review(models.Model):
             self._flag_if_banned()
         self.save()
 
+    def can_be_reported_by(self, user) -> bool:
+        """Only a signed-in customer, never staff, never its author, and
+        once per customer, ever."""
+        return (
+            user.is_authenticated
+            and not user.is_staff
+            and self.author_id != user.pk
+            and not self.reports.filter(reporter=user).exists()
+        )
+
+    def flag(self):
+        """Put the review on staff's flagged list. Not an edit, so no
+        "edited" tag."""
+        self.is_flagged = True
+        self.save(update_fields=["is_flagged"])
+
     def clear_flag(self):
         """Staff have checked the review: it leaves the flagged list. Not an
         edit, so no "edited" tag."""
@@ -179,3 +206,44 @@ class Review(models.Model):
     def _flag_if_banned(self):
         if contains_banned_word(f"{self.title}\n{self.comment}"):
             self.is_flagged = True
+
+
+class ReviewReport(models.Model):
+    """One customer's report of someone else's review, at most once ever —
+    even after staff clear the flag it raised."""
+
+    class Reason(models.TextChoices):
+        SPAM = "spam", "Spam"
+        OFFENSIVE = "offensive", "Offensive language"
+        OFF_TOPIC = "off_topic", "Off-topic"
+        OTHER = "other", "Other"
+
+    review = models.ForeignKey(Review, on_delete=models.CASCADE, related_name="reports")
+    reporter = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="review_reports",
+    )
+    reason = models.CharField(max_length=20, choices=Reason)
+    note = models.TextField(max_length=500, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["review", "reporter"], name="unique_report_review_reporter"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.get_reason_display()} report on {self.review}"
+
+    def save(self, *args, **kwargs):
+        """Any new report flags the review — even one staff have cleared.
+        Both writes happen together or not at all."""
+        adding = self._state.adding
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+            if adding:
+                self.review.flag()

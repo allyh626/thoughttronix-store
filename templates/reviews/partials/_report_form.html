@@ -1,0 +1,25 @@
+{# Reporting a review in place: replaces the Report button. Sending swaps #}
+{# in "Reported" (_reported.html), or this form with errors; Cancel #}
+{# fetches the unchanged card. #}
+<form
+  hx-post="{% url 'reviews:report' review.pk %}"
+  hx-swap="outerHTML"
+  hx-disabled-elt="find button"
+  class="w-full space-y-2"
+  novalidate>
+  <p class="text-sm font-semibold">Report this review</p>
+  {% for field in form %}
+    {% include "products/partials/_field.html" %}
+  {% endfor %}
+  <div class="flex justify-end gap-2">
+    <button
+      type="button"
+      hx-get="{% url 'reviews:card' review.pk %}"
+      hx-target="#review-{{ review.pk }}"
+      hx-swap="outerHTML"
+      class="btn btn-ghost btn-xs">
+      Cancel
+    </button>
+    <button type="submit" class="btn btn-warning btn-xs">Send report</button>
+  </div>
+</form>
